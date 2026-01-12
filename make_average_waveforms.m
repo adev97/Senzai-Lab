@@ -1,30 +1,31 @@
-% Example: load raw data (from Elissa)
+%% generate average waveforms from raw data
+% takes part of LoadRawData and LoadTemplateWaveforms from Elissa
 
 addpath(genpath("R:\Basic_Sciences\Phys\SenzaiLab\Yuta_Senzai\MatlabCodes\MATLAB\MyCodes"))
 addpath(genpath("D:\buzcode-master")) 
 
-sr = 30000; % Probe sampling rate (Hz)
+sr = 30000;
 nchan_probe = 385;
-chan = 1; % channel to load
+dtype = 'int16';
 
-% File path
-% fp = "D:\OpenEphys_Data\Mouse08\Mouse08_20251007_4shanks_810to2250_FullFieldGrating\Record Node 102\experiment1\recording1\continuous\OneBox-100.ProbeA";
-
-fp = "\\fsmresfiles.fsm.northwestern.edu\fsmresfiles\Basic_Sciences\Phys\SenzaiLab\Elissa_Belluccini\OpenEphys_Data\Mouse08\Mouse08_20251007_4shanks_810to2250_FullFieldGrating\Record Node 102\experiment1\recording1\continuous\OneBox-100.ProbeA";
+% load all raw data (merged from kilosort folder)
+fp = "D:\Kilosort\Mouse08_SC_20251007_810to2250\";
 cd(fp) 
+rawfile = 'Merged.dat';
 
-d = LoadBinary('continuous.dat','frequency',sr,'nChannels',nchan_probe,...
-'channels',chan);
-d_dur = length(d)/sr; % Recording duration (sec)
-td = (1:length(d))/sr; % Time array (sec)
+m = memmapfile(rawfile, ...
+    'Format', {dtype, [nchan_probe Inf], 'data'});
 
+nSamples = size(m.Data.data, 2);   % number of time samples
+d_dur = nSamples / sr;             % recording duration (s)
+td = (1:nSamples) / sr;            % time vector (s)
 
-% plot all raw data, entire timeseries (1600s)
-figure; 
-plot(td, d);
-xlabel('Time (s)');
-ylabel('Amplitude');
-title('Raw Channel Data');   
+% % plot all raw data, entire timeseries (1600s)
+% figure; 
+% plot(td, d);
+% xlabel('Time (s)');
+% ylabel('Amplitude');
+% title('Raw Channel Data');   
 
 %% load kilosort data
 ks_path = 'D:\Kilosort\Mouse08_SC_20251007_810to2250\kilosort4';
@@ -32,7 +33,30 @@ ks_path = 'D:\Kilosort\Mouse08_SC_20251007_810to2250\kilosort4';
 spike_times = readNPY([ks_path,'\spike_times.npy']);
 spike_times = double(spike_times)/sr;    
 spike_clusters = readNPY([ks_path,'\spike_clusters.npy']);
-unit_num = length(unique(spike_clusters));
+unit_num = length(unique(spike_clusters)); % 796 units
+
+% Find main channel for each unit
+templates = readNPY([ks_path,'\templates.npy']); % [nTemplates x nTimepoints x nChannels]
+spike_templates = readNPY([ks_path,'\spike_templates.npy']);
+
+if ~isempty(find(spike_templates~=spike_clusters))
+    % spike_templates will not match spike_clusters if clusters are
+    % merged or split in Phy. This will result in plotting incorrect
+    % spike waveforms
+    display('Warning: spike_templates does not match spike_clusters')
+    plot_wf = false;
+end
+
+channel_map = readNPY([ks_path,'\channel_map.npy']);   % [nChannels x 1], 0-based         
+templates = permute(templates, [1 3 2]);      % Now: [nTemplates x nChannels x nTimepoints]    
+% Compute peak-to-peak amplitude per channel per template
+ptp = squeeze(max(templates, [], 3) - min(templates, [], 3));  % [nTemplates x nChannels]    
+% Find channel with max amplitude for each unit
+[~, max_chan_idx] = max(ptp, [], 2);  % 1-indexed
+chan_ids0 = channel_map(max_chan_idx);     
+% Add 1 for MATLAB 1-based indexing
+chan_ids1 = chan_ids0+1; 
+
 
 
 
