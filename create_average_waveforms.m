@@ -99,20 +99,21 @@ fclose(fid);
 
 disp("Calculate Avg Waveforms Complete");
 
-% now you have the mean wave form for each good unit!
+% now you have the mean wave form for each good unit for each channel!
 
 %% Visualize mean waveforms - filter by channel parity to avoid checkerboard (even vs odd units)
 
 outWaveDir = '\\fsmresfiles.fsm.northwestern.edu\fsmresfiles\Basic_Sciences\Phys\SenzaiLab\Aparna\plus2ms-minus1ms\average-waveforms-per-unit-from-raw';
-outDepthDir = '\\fsmresfiles.fsm.northwestern.edu\fsmresfiles\Basic_Sciences\Phys\SenzaiLab\Aparna\plus2ms-minus1ms\heatmap-waveforms-per-unit-from-raw';
+outDepthDir = '\\fsmresfiles.fsm.northwestern.edu\fsmresfiles\Basic_Sciences\Phys\SenzaiLab\Aparna\plus2ms-minus1ms\heatmap-21chan-per-unit-from-raw';
 
 if ~exist(outWaveDir, 'dir'); mkdir(outWaveDir); end
 if ~exist(outDepthDir, 'dir'); mkdir(outDepthDir); end
 
 
-for clusterID_index = 1:nClusters
+for clusterID_index = 32:nClusters
 
     mean_wave_this_cluster = meanWav(:,:,clusterID_index);
+    num_channels_to_plot = 21;
     
     % Find channel with largest spike amplitude
     [~, peakCh] = max(max(abs(mean_wave_this_cluster),[],2));
@@ -135,7 +136,7 @@ for clusterID_index = 1:nClusters
     y_distance = abs(ypos(sameParity_channels) - peakCh_ypos);
     
     % Start with distance window
-    spatialWindow = 150; % micrometers
+    spatialWindow = 300; % micrometers
     nearby_idx = find(y_distance <= spatialWindow);
     channelsToPlot = sameParity_channels(nearby_idx);
     
@@ -144,15 +145,15 @@ for clusterID_index = 1:nClusters
     channelsToPlot = channelsToPlot(sortIdx);
     
     % If too few channels, expand to nearest neighbors with same parity
-    if length(channelsToPlot) < 11
+    if length(channelsToPlot) < num_channels_to_plot
         warning('Only %d channels within %d μm with same parity, expanding to nearest neighbors', ...
                 length(channelsToPlot), spatialWindow);
         
         [~, sortIdx] = sort(y_distance);
         sorted_channels = sameParity_channels(sortIdx);
         
-        % Take up to 11 nearest channels
-        n_to_take = min(11, length(sorted_channels));
+        % Take up to num_channels_to_plot nearest channels
+        n_to_take = min(num_channels_to_plot, length(sorted_channels));
         channelsToPlot = sorted_channels(1:n_to_take);
         
         [~, sortIdx] = sort(ypos(channelsToPlot), 'descend');
@@ -160,10 +161,10 @@ for clusterID_index = 1:nClusters
     end
     
     % If too many, keep closest to peak
-    if length(channelsToPlot) > 11
+    if length(channelsToPlot) > num_channels_to_plot
         distances_to_plot = abs(ypos(channelsToPlot) - peakCh_ypos);
         [~, distIdx] = sort(distances_to_plot);
-        channelsToPlot = channelsToPlot(distIdx(1:11));
+        channelsToPlot = channelsToPlot(distIdx(1:num_channels_to_plot));
         
         [~, sortIdx] = sort(ypos(channelsToPlot), 'descend');
         channelsToPlot = channelsToPlot(sortIdx);
@@ -205,14 +206,10 @@ for clusterID_index = 1:nClusters
     yticklabels(arrayfun(@(ch) sprintf('Ch %d (%.0f μm)', ch, ypos(ch)), ...
                 channelsToPlot, 'UniformOutput', false));
     
-    % % Add text annotation
-    % text(0.02, 0.98, sprintf('Shank x=%.0f μm, %s channels\nSpatial window: ±%.0f μm', ...
-    %      peakCh_xpos, parityStr{peakParity+1}, spatialWindow), ...
-    %      'Units', 'normalized', 'VerticalAlignment', 'top', ...
-    %      'FontSize', 10, 'BackgroundColor', 'white');
-    saveas(fig1, fullfile(outWaveDir, ...
-        sprintf('unit_%03d_avg.png', good_clusters(clusterID_index))));
-    close(fig1);
+    % SAVE WAVEFORMS
+    % saveas(fig1, fullfile(outWaveDir, ...
+    %     sprintf('unit_%03d_avg.png', good_clusters(clusterID_index))));
+    % close(fig1);
 
     hold off;
     
@@ -246,7 +243,7 @@ for clusterID_index = 1:nClusters
     grid on;
     
     saveas(fig2, fullfile(outDepthDir, ...
-        sprintf('unit_%03d_heatmap.png', good_clusters(clusterID_index))));
+        sprintf('unit_%03d_heatmap_21chan.png', good_clusters(clusterID_index))));
     close(fig2);
     
     % Should see a smooth progression if sorting is correct
