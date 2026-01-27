@@ -227,6 +227,9 @@ for clusterID_index = 32:nClusters
     % Should see a smooth progression if sorting is correct
 end
 
+%% Save mean waveforms and cluster IDs for cell type identification (python script)
+saveFolder = '\\fsmresfiles.fsm.northwestern.edu\fsmresfiles\Basic_Sciences\Phys\SenzaiLab\Aparna\Mouse08\mean-waveforms-good-clusters';
+save(saveFolder, 'meanWav_units.mat', 'meanWav', 'good_clusters', '-v7.3');
 
 
 
