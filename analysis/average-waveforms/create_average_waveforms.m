@@ -16,15 +16,21 @@ templates     = readNPY(fullfile(ksDir,'templates.npy')); % can use template to 
 chanPos       = readNPY(fullfile(ksDir,'channel_positions.npy')); % [chan × 2]
 
 % load cluster description (good/mua/noise)
-cgFile = fullfile(ksDir,'cluster_group.tsv');
+% cgFile = fullfile(ksDir,'cluster_group.tsv'); % pre-manual curation
+cgFile = fullfile(ksDir, 'cluster_KSLabel.tsv'); % post-manual curation
 
 cluster_groups = readtable(cgFile, ...
     'FileType','text', ...
     'Delimiter','\t');
 
-keepGroups = {'good'}; % only keep good labeled units
+keepGroups = {'good'}; % only keep good labeled units %%%%%%%%%%%%%%
 
-toKeep = ismember(cluster_groups.group, keepGroups);
+% if using pre-manual cluster_group.tsv
+% toKeep = ismember(cluster_groups.group, keepGroups);
+% keepClusters = cluster_groups.cluster_id(toKeep); % contains only the good cluster ids (162 total)
+
+% if using post-manual cluster_KSLabel.tsv
+toKeep = ismember(cluster_groups.KSLabel, keepGroups);
 keepClusters = cluster_groups.cluster_id(toKeep); % contains only the good cluster ids (162 total)
 
 % filter spikes by only kept clusters
@@ -103,17 +109,18 @@ disp("Calculate Avg Waveforms Complete");
 
 %% Visualize mean waveforms - filter by channel parity to avoid checkerboard (even vs odd units)
 
-outWaveDir = '\\fsmresfiles.fsm.northwestern.edu\fsmresfiles\Basic_Sciences\Phys\SenzaiLab\Aparna\plus2ms-minus1ms\average-waveforms-per-unit-from-raw';
-outDepthDir = '\\fsmresfiles.fsm.northwestern.edu\fsmresfiles\Basic_Sciences\Phys\SenzaiLab\Aparna\plus2ms-minus1ms\heatmap-21chan-per-unit-from-raw';
+% changed folder structure, change outputs if need to run again
+outWaveDir = '\\fsmresfiles.fsm.northwestern.edu\fsmresfiles\Basic_Sciences\Phys\SenzaiLab\Aparna\Mouse08\20251007_MergedDat\cluster_KSLabel\plus2ms-minus1ms\average-waveforms-per-unit-from-raw';
+outDepthDir = '\\fsmresfiles.fsm.northwestern.edu\fsmresfiles\Basic_Sciences\Phys\SenzaiLab\Aparna\Mouse08\20251007_MergedDat\cluster_KSLabel\plus2ms-minus1ms\heatmap-21chan-per-unit-from-raw';
 
 if ~exist(outWaveDir, 'dir'); mkdir(outWaveDir); end
 if ~exist(outDepthDir, 'dir'); mkdir(outDepthDir); end
 
 
-for clusterID_index = 32:nClusters
+for clusterID_index = 1:nClusters
 
     mean_wave_this_cluster = meanWav(:,:,clusterID_index);
-    num_channels_to_plot = 21;
+    num_channels_to_plot = 21; %% change this based on how many channels you want to visualize above/below the peak channel
 
     % Find channel with largest spike amplitude
     [~, peakCh] = max(max(abs(mean_wave_this_cluster),[],2));
@@ -190,12 +197,12 @@ for clusterID_index = 32:nClusters
     saveas(fig1, fullfile(outWaveDir, ...
         sprintf('unit_%03d_avg.png', good_clusters(clusterID_index))));
     close(fig1);  
-    
+
     
     %% Heatmap spike propogation
     
     fig2 = figure('Visible','off');
-    subplot(1,2,1);
+    % subplot(1,2,1);
     imagesc(t, 1:length(channelsToPlot), mean_wave_this_cluster(channelsToPlot,:));
     colormap('jet');
     colorbar;
@@ -206,32 +213,30 @@ for clusterID_index = 32:nClusters
     set(gca, 'YTickLabel', arrayfun(@(ch) sprintf('Ch%d', ch), channelsToPlot, 'UniformOutput', false));
     
     % Find peak time on each channel
-    subplot(1,2,2);
-    peak_times = zeros(length(channelsToPlot), 1);
-    for i = 1:length(channelsToPlot)
-        ch = channelsToPlot(i);
-        [~, peak_idx] = min(mean_wave_this_cluster(ch,:)); % trough time
-        peak_times(i) = t(peak_idx);
-    end
-    
-    plot(peak_times, ypos(channelsToPlot), 'ko-', 'LineWidth', 2, 'MarkerFaceColor', 'k');
-    xlabel('Trough time (ms)');
-    ylabel('Depth (μm)');
-    title('Spike propagation');
-    grid on;
+    % subplot(1,2,2);
+    % peak_times = zeros(length(channelsToPlot), 1);
+    % for i = 1:length(channelsToPlot)
+    %     ch = channelsToPlot(i);
+    %     [~, peak_idx] = min(mean_wave_this_cluster(ch,:)); % trough time
+    %     peak_times(i) = t(peak_idx);
+    % end
+    % 
+    % plot(peak_times, ypos(channelsToPlot), 'ko-', 'LineWidth', 2, 'MarkerFaceColor', 'k');
+    % xlabel('Trough time (ms)');
+    % ylabel('Depth (μm)');
+    % title('Spike propagation');
+    % grid on;
     
     saveas(fig2, fullfile(outDepthDir, ...
         sprintf('unit_%03d_heatmap_21chan.png', good_clusters(clusterID_index))));
     close(fig2);
     
-    % Should see a smooth progression if sorting is correct
 end
 
 %% Save mean waveforms and cluster IDs for cell type identification (python script)
 saveFolder = '\\fsmresfiles.fsm.northwestern.edu\fsmresfiles\Basic_Sciences\Phys\SenzaiLab\Aparna\Mouse08\mean-waveforms-good-clusters';
-save(saveFolder, 'meanWav_units.mat', 'meanWav', 'good_clusters', '-v7.3');
-
-
+save(fullfile(saveFolder, 'meanWav_units.mat'), 'meanWav', 'good_clusters');
+disp("Mean Waveforms Saved!")
 
 
 
