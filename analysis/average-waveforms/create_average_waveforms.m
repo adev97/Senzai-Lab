@@ -1,7 +1,7 @@
 %% New Script that modifies DepthSort_meanWaveForms (from Yuta) for current Neuropixel data and only makes average waveform, without sorting
 
 addpath(genpath("R:\Basic_Sciences\Phys\SenzaiLab\Yuta_Senzai\MatlabCodes\MATLAB\MyCodes"))
-addpath(genpath("D:\buzcode-master")) 
+addpath(genpath("C:\Users\urs2027\Documents\GitHub\Senzai-Lab\buzcode-master")) 
 
 sr = 30000;
 nchan_probe = 384;
@@ -117,7 +117,7 @@ if ~exist(outWaveDir, 'dir'); mkdir(outWaveDir); end
 if ~exist(outDepthDir, 'dir'); mkdir(outDepthDir); end
 
 
-for clusterID_index = 1:nClusters
+for clusterID_index = 55:nClusters
 
     mean_wave_this_cluster = meanWav(:,:,clusterID_index);
     num_channels_to_plot = 21; %% change this based on how many channels you want to visualize above/below the peak channel
@@ -127,41 +127,41 @@ for clusterID_index = 1:nClusters
     
     peakCh_ypos = ypos(peakCh);
     peakCh_xpos = xpos(peakCh);
-    
+
     % Get channels on same shank (same x position)
     sameshank_channels = find(xpos == peakCh_xpos);
-    
+
     % Filter by same parity (odd/even recording index) as peak channel
     peakParity = mod(peakCh, 2);  % 0 for even, 1 for odd
     sameParity = (mod(sameshank_channels, 2) == peakParity);
     sameParity_channels = sameshank_channels(sameParity);
-    
+
     % Calculate distance from peak channel
     y_distance = abs(ypos(sameParity_channels) - peakCh_ypos);
-    
+
     % Start with spatial window
     spatialWindow = 300; % micrometers
     nearby_idx = find(y_distance <= spatialWindow);
     channelsToPlot = sameParity_channels(nearby_idx);
-    
+
     % If too few channels within window, expand to nearest neighbors
     if length(channelsToPlot) < num_channels_to_plot
         [~, sortIdx] = sort(y_distance);
         n_to_take = min(num_channels_to_plot, length(sameParity_channels));
         channelsToPlot = sameParity_channels(sortIdx(1:n_to_take));
     end
-    
+
     % If too many channels, keep closest to peak
     if length(channelsToPlot) > num_channels_to_plot
         distances_to_plot = abs(ypos(channelsToPlot) - peakCh_ypos);
         [~, distIdx] = sort(distances_to_plot);
         channelsToPlot = channelsToPlot(distIdx(1:num_channels_to_plot));
     end
-    
+
     % Sort by depth for plotting (superficial to deep)
     [~, sortIdx] = sort(ypos(channelsToPlot), 'descend');
     channelsToPlot = channelsToPlot(sortIdx);
-    
+
     %% Waveforms stacked by depth
     fig1 = figure('Visible','off');
     hold on;
