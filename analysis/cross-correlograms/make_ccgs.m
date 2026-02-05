@@ -1,5 +1,13 @@
 %% Make cross-correlograms (CCGs) for different units to assess likelyhood of firing together
 
+% **********************************
+% calculates CCGs from CCG.m per pair per state (wake, nrem, rem).
+% builds all pairs for the units
+% creates heatmap with CCG score for all unique pairs
+% includes short portion to plot CCGs for all states for one pair (manually
+% assign two units to compare)
+
+
 % CCG.m from buzcode
 
 addpath(genpath("R:\Basic_Sciences\Phys\SenzaiLab\Yuta_Senzai\MatlabCodes\MATLAB\MyCodes"))
@@ -159,8 +167,108 @@ ylabel('NREM − WAKE coupling')
 title('Sleep-dependent coupling change')
 
 
-%% Plot Heatmaps ordered by highest coupling - lowest coupling (from CCG peak)
+% %% 1. Plot Heatmaps ordered by highest coupling - lowest coupling (from CCG peak)
+% 
+% %% Parameters
+% states = {'WAKE', 'NREM', 'REM'};
+% all_ccgs = {ccg_wake, ccg_nrem, ccg_rem};
+% nStates = length(states);
+% 
+% nUnits = size(ccg_wake, 2); % number of units
+% nBins = size(ccg_wake, 1);
+% 
+% %% Build normalized pairwise CCGs (lower triangle only)
+% normCCG_states = cell(1, nStates);
+% pairCount = nUnits*(nUnits-1)/2;
+% 
+% for s = 1:nStates
+%     ccg = all_ccgs{s};
+% 
+%     normCCG = [];
+%     preID = [];
+%     postID = [];
+% 
+%     for i = 1:nUnits
+%         for j = 1:i-1  % lower triangle, each pair once
+%             pairCCG = squeeze(ccg(:,i,j))';
+%             pairCCGnorm = pairCCG / median(pairCCG); % normalize by median firing
+%             normCCG = [normCCG; pairCCGnorm];
+%             preID = [preID; i];
+%             postID = [postID; j];
+%         end
+%     end
+%     normCCG_states{s} = normCCG; % rows = pairs, columns = bins
+% end
+% 
+% %% Smooth each pair with a proper Gaussian
+% sigma = 2; % standard deviation in bins
+% x = -3*sigma:3*sigma;
+% gaussKernel = exp(-x.^2/(2*sigma^2));
+% gaussKernel = gaussKernel / sum(gaussKernel);
+% 
+% for s = 1:nStates
+%     for row = 1:size(normCCG_states{s},1)
+%         normCCG_states{s}(row,:) = conv(normCCG_states{s}(row,:), gaussKernel, 'same');
+%     end
+% end
+% 
+% %% Sort pairs by zero-lag coupling (from WAKE)
+% [~, zeroBin] = min(abs(t));  % bin closest to lag 0
+% zeroLagVals = normCCG_states{1}(:, zeroBin); % WAKE used for sorting
+% [~, sortIdx] = sort(zeroLagVals, 'descend'); % descending order (highest coupling to lowest coupling)
+% 
+% pairsToPlot = 400;
+% subsetIdx = sortIdx(1:pairsToPlot); % first N pairs after sorting
+% 
+% %% Plot heatmaps side-by-side
+% figure;
+% 
+% for s = 1:nStates
+%     subplot(1,nStates,s)
+% 
+%     dataSubset = normCCG_states{s}(subsetIdx, :);
+%     imagesc(t, 1:pairsToPlot, dataSubset);
+% 
+%     xlabel('Time lag (s)');
+%     ylabel('Neuron pairs (sorted by zero-lag WAKE)');
+%     title([states{s} ' normalized CCGs']);
+%     clim([0 2]);
+%     colormap('hot');
+%     colorbar;
+%     set(gca, 'YDir', 'reverse');
+%     xlim([t(1) t(end)]);
+% end
+% 
+% 
+% %% Plot CCG for one pair across all states
+% % choose your unit pair
+% unitA = 15;
+% unitB = 72;
+% 
+% figure; hold on;
+% 
+% colors = {'k','r','b'}; % color for each state
+% 
+% for s = 1:length(states)
+%     ccgState = all_ccgs{s};
+% 
+%     % extract lower triangle if needed
+%     ccgPair = squeeze(ccgState(:,unitA,unitB)); % spikes of B relative to A
+% 
+%     % normalize by median
+%     ccgNorm = ccgPair / median(ccgPair);
+% 
+%     plot(t, ccgNorm, 'Color', colors{s}, 'LineWidth', 2);
+% end
+% 
+% xlabel('Time lag (s)');
+% ylabel('Normalized CCG');
+% title(sprintf('Unit %d → Unit %d across states', unitA, unitB));
+% legend(states,'Location','best');
+% grid on;
+% xlim([t(1) t(end)]);
 
+%% 2. PLOT HEATMAP NEW BASELINE NORMALIZATION USE THIS ONE
 %% Parameters
 states = {'WAKE', 'NREM', 'REM'};
 all_ccgs = {ccg_wake, ccg_nrem, ccg_rem};
@@ -168,6 +276,15 @@ nStates = length(states);
 
 nUnits = size(ccg_wake, 2); % number of units
 nBins = size(ccg_wake, 1);
+
+% Gaussian smoothing kernel (proper Gaussian)
+sigma = 3; % in bins
+xGauss = -3*sigma:3*sigma;
+gaussKernel = exp(-xGauss.^2/(2*sigma^2));
+gaussKernel = gaussKernel / sum(gaussKernel);
+
+% Baseline window for normalization (e.g., 0.2-0.5 s away from zero lag)
+baselineWindow = [0.2 0.5]; 
 
 %% Build normalized pairwise CCGs (lower triangle only)
 normCCG_states = cell(1, nStates);
@@ -177,42 +294,51 @@ for s = 1:nStates
     ccg = all_ccgs{s};
     
     normCCG = [];
-    preID = [];
-    postID = [];
     
     for i = 1:nUnits
         for j = 1:i-1  % lower triangle, each pair once
             pairCCG = squeeze(ccg(:,i,j))';
-            pairCCGnorm = pairCCG / median(pairCCG); % normalize by median firing
+            
+            % Smooth CCG with Gaussian kernel
+            pairCCG_sm = conv(pairCCG, gaussKernel, 'same');
+            
+            % Find baseline bins
+            baselineBins = find(abs(t) >= baselineWindow(1) & abs(t) <= baselineWindow(2));
+            
+            % Normalize by median of baseline
+            pairCCGnorm = pairCCG_sm / median(pairCCG_sm(baselineBins));
+            
             normCCG = [normCCG; pairCCGnorm];
-            preID = [preID; i];
-            postID = [postID; j];
         end
     end
+    
     normCCG_states{s} = normCCG; % rows = pairs, columns = bins
 end
 
 %% Sort pairs by zero-lag coupling (from WAKE)
-[~, zeroBin] = min(abs(t));  % bin closest to lag 0
-zeroLagVals = normCCG_states{1}(:, zeroBin); % WAKE used for sorting
-[~, sortIdx] = sort(zeroLagVals, 'descend'); % descending order (highest coupling to lowest coupling)
+[~, zeroBin] = min(abs(t));  
+zeroLagVals = normCCG_states{1}(:, zeroBin); 
+[~, sortIdx] = sort(zeroLagVals, 'descend'); % highest coupling first
 
-pairsToPlot = 400;
-subsetIdx = sortIdx(1:pairsToPlot); % first N pairs after sorting
+pairsToPlot = 400; % only top N pairs for readability % pairCount if want all
+subsetIdx = sortIdx(1:pairsToPlot);
 
 %% Plot heatmaps side-by-side
 figure;
 
 for s = 1:nStates
     subplot(1,nStates,s)
-
-    dataSubset = normCCG_states{s}(subsetIdx, :);
+    
+    dataSubset = normCCG_states{s}(subsetIdx,:);
     imagesc(t, 1:pairsToPlot, dataSubset);
-
+    
     xlabel('Time lag (s)');
     ylabel('Neuron pairs (sorted by zero-lag WAKE)');
     title([states{s} ' normalized CCGs']);
-    clim([0 2]);
+    
+    % Set color limits for consistent visualization
+    clim([0.5 2.5]); 
+    
     colormap('hot');
     colorbar;
     set(gca, 'YDir', 'reverse');
@@ -220,31 +346,34 @@ for s = 1:nStates
 end
 
 
-%% Plot CCG for one pair across all states
+%% Plot CCG for one pair across all states with baseline normalization
 % choose your unit pair
-unitA = 15;
-unitB = 72;
+unitA = 3;
+unitB = 7;
 
 figure; hold on;
 
 colors = {'k','r','b'}; % color for each state
+nEdgeBins = 50;         % number of bins at each end to compute baseline
 
 for s = 1:length(states)
     ccgState = all_ccgs{s};
-    
-    % extract lower triangle if needed
-    ccgPair = squeeze(ccgState(:,unitA,unitB)); % spikes of B relative to A
-    
-    % normalize by median
-    ccgNorm = ccgPair / median(ccgPair);
-    
+
+    % extract CCG for this pair (spikes of B relative to A)
+    ccgPair = squeeze(ccgState(:,unitA,unitB));
+
+    % baseline normalization using edge bins
+    baseline = median([ccgPair(1:nEdgeBins); ccgPair(end-nEdgeBins+1:end)]);
+    ccgNorm = ccgPair / baseline;
+
+    % plot
     plot(t, ccgNorm, 'Color', colors{s}, 'LineWidth', 2);
 end
 
 xlabel('Time lag (s)');
 ylabel('Normalized CCG');
 title(sprintf('Unit %d → Unit %d across states', unitA, unitB));
-legend(states,'Location','best');
+legend(states, 'Location', 'best');
 grid on;
 xlim([t(1) t(end)]);
 
@@ -252,20 +381,71 @@ xlim([t(1) t(end)]);
 
 
 
+%% Example
+%% Example: Plot one unit pair across states with proper baseline and Gaussian smoothing
 
+% Choose a pair
+unit1 = 3; % first unit index
+unit2 = 7;  % second unit index
 
+% Extract raw CCGs for this pair
+ccg_pair_wake = squeeze(ccg_wake(:, unit1, unit2));
+ccg_pair_nrem = squeeze(ccg_nrem(:, unit1, unit2));
+ccg_pair_rem  = squeeze(ccg_rem(:, unit1, unit2));
 
+%% Define baseline bins (far from zero-lag, e.g., 200-500 ms)
+baselineBins = find(abs(t) > 0.2 & abs(t) < 0.5); % 200-500 ms away
 
+%% Normalize by baseline median
+norm_pair_wake = ccg_pair_wake / median(ccg_pair_wake(baselineBins));
+norm_pair_nrem = ccg_pair_nrem / median(ccg_pair_nrem(baselineBins));
+norm_pair_rem  = ccg_pair_rem  / median(ccg_pair_rem(baselineBins));
 
+%% Smooth with proper Gaussian
+sigma = 0.05; % 50 ms smoothing
+dt = t(2) - t(1); % bin width
+halfWidth = 4*sigma; 
+x = -halfWidth:dt:halfWidth;
+gaussKernel = exp(-x.^2/(2*sigma^2));
+gaussKernel = gaussKernel / sum(gaussKernel);
 
+smoothCCG = @(c) conv(c, gaussKernel, 'same');
 
+norm_pair_wake = smoothCCG(norm_pair_wake);
+norm_pair_nrem = smoothCCG(norm_pair_nrem);
+norm_pair_rem  = smoothCCG(norm_pair_rem);
 
+%% Plot
+figure('Position',[100 100 1200 400]);
 
+% Raw CCGs
+subplot(2,3,1)
+plot(t, ccg_pair_wake, 'b', 'LineWidth',1.5)
+xlabel('Time lag (s)'); ylabel('Raw count'); title('WAKE raw CCG')
 
+subplot(2,3,2)
+plot(t, ccg_pair_nrem, 'r', 'LineWidth',1.5)
+xlabel('Time lag (s)'); ylabel('Raw count'); title('NREM raw CCG')
 
+subplot(2,3,3)
+plot(t, ccg_pair_rem, 'g', 'LineWidth',1.5)
+xlabel('Time lag (s)'); ylabel('Raw count'); title('REM raw CCG')
 
+% Normalized + smoothed CCGs
+subplot(2,3,4)
+plot(t, norm_pair_wake, 'b', 'LineWidth',1.5)
+xlabel('Time lag (s)'); ylabel('Normalized'); title('WAKE normalized')
+ylim([0 3]) % baseline=1, peaks visible
 
+subplot(2,3,5)
+plot(t, norm_pair_nrem, 'r', 'LineWidth',1.5)
+xlabel('Time lag (s)'); ylabel('Normalized'); title('NREM normalized')
+ylim([0 3])
 
+subplot(2,3,6)
+plot(t, norm_pair_rem, 'g', 'LineWidth',1.5)
+xlabel('Time lag (s)'); ylabel('Normalized'); title('REM normalized')
+ylim([0 3])
 
 
 
@@ -315,94 +495,20 @@ xlim([t(1) t(end)]);
 
 
 
-% fill x position and y position per channel
-xpos = chanPos(:,1);
-ypos = chanPos(:,2);
 
-good_clusters = unique(spikeClusters);
-good_clusters(good_clusters==0) = [];   % remove noise if present
-nClusters = numel(good_clusters);
 
-%% spikeTimes - contains all spike timings (when)
-%% spikeClusters - contains which unit gave the spike (who) and preserves channel number structure
 
-%% Now building cross-correlograms, searching for units that fire together
-% during this data collection
 
-% convert time to seconds instead of samples
-ts = double(spikeTimes) / sr;   % convert to seconds
-gs = double(spikeClusters);     % unit IDs
 
-%% remap cluster ids into unit numbers
-unitIDs = zeros(size(gs));
-for i = 1:nClusters
-    unitIDs(gs == good_clusters(i)) = i;
-end
 
-s = [ts unitIDs]; % to pass into CCG
 
-% % Map original cluster IDs to consecutive indices
-% [~, gs_idx] = ismember(spikeClusters, good_clusters);
-% 
-% % % Use gs_idx for CCG
-% % [ccg, t] = CCG(ts, gs_idx, 'binSize', binSize, 'duration', duration);
 
-%% Open Sleep States files
 
-eegDir = '\\fsmresfiles.fsm.northwestern.edu\fsmresfiles\Basic_Sciences\Phys\SenzaiLab\Aparna\Mouse08_eeg';
-load(fullfile(eegDir, 'Mouse08_eeg.SleepState.states.mat'));
 
-% set bin size and duration to find units firing together
-binSize  = 0.01;   % 10 ms resolution (default in CCG.m)
-duration = 8;    % ±8 ms window (same as yuta's example script)
 
-%% Isolate different sleep states
-s_wake = Restrict(s, SleepState.ints.WAKEstate);
-s_nrem = Restrict(s, SleepState.ints.NREMstate);
-s_rem  = Restrict(s, SleepState.ints.REMstate);
 
-%% Compute CCGs for all states
-states = {'WAKEstate','REMstate','NREMstate'};
 
-for st = 1:length(states)
 
-    intervals = SleepState.ints.(states{st});
-
-    % keep only spikes in that state
-    s_state = Restrict(s, intervals);
-
-    % compute cross-correlogram
-    [ccg, t] = CCG(s_state(:,1), s_state(:,2), ...
-                   'binSize', binSize, ...
-                   'duration', duration);
-
-    CCG_all.(states{st}).ccg = ccg;
-    CCG_all.(states{st}).t   = t;
-end
-
-%% Make heatmap
-for st = 1:length(states)
-
-    ccg = CCG_all.(states{st}).ccg;
-    t   = CCG_all.(states{st}).t;
-
-    CCG_pooled = [];
-
-    for k = 1:nClusters
-        CCGmtrx = squeeze(ccg(:,k,1:(k-1)))';   % avoid duplicates
-        CCG_pooled = [CCG_pooled; CCGmtrx];
-    end
-
-    % Normalize (reveals real coupling)
-    CCG_pooled = CCG_pooled ./ median(CCG_pooled,2);
-
-    figure;
-    imagesc(t*1000, 1:size(CCG_pooled,1), CCG_pooled);
-    xlabel('Lag (ms)');
-    ylabel('Neuron pairs');
-    title(states{st});
-    colorbar;
-end
 
 
 
