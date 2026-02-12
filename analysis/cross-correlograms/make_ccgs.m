@@ -246,9 +246,23 @@ end
 
 
 %% Plot CCG for one pair across all states with baseline normalization
-% choose your unit pair
-unitA = 3;
-unitB = 7;
+
+% Specify the original cluster IDs you want to examine
+clusterA = 63;  % original Kilosort cluster ID
+clusterB = 415;  % original Kilosort cluster ID
+
+% Convert to unit IDs
+unitA = find(good_clusters == clusterA);
+unitB = find(good_clusters == clusterB);
+
+% Check if clusters exist in your good units
+if isempty(unitA) || isempty(unitB)
+    error('One or both cluster IDs not found in good_clusters');
+end
+
+disp(['Cluster ' num2str(clusterA) ' → Unit ' num2str(unitA)])
+disp(['Cluster ' num2str(clusterB) ' → Unit ' num2str(unitB)])
+
 
 figure; hold on;
 
@@ -271,80 +285,89 @@ end
 
 xlabel('Time lag (s)');
 ylabel('Normalized CCG');
-title(sprintf('Unit %d → Unit %d across states', unitA, unitB));
+title(sprintf('Cluster %d → Cluster %d (Units %d → %d)', clusterA, clusterB, unitA, unitB));
 legend(states, 'Location', 'best');
 grid on;
 xlim([t(1) t(end)]);
 
 
+%% Save CCG calculations
+ccgSavePath = "\\fsmresfiles.fsm.northwestern.edu\fsmresfiles\Basic_Sciences\Phys\SenzaiLab\Aparna\Mouse08\ccgs-all-units";
+save(fullfile(ccgSavePath, 'ccgs_all.mat'), 'ccg_wake', 'ccg_nrem', 'ccg_rem', 't');
+disp("CCGs (wake, nrem, rem) Saved!");
 
 
 
-%% Example
+
+
+
+
+
+
 %% Example: Plot one unit pair across states with proper baseline and Gaussian smoothing
 
-% Choose a pair
-unit1 = 3; % first unit index
-unit2 = 7;  % second unit index
-
-% Extract raw CCGs for this pair
-ccg_pair_wake = squeeze(ccg_wake(:, unit1, unit2));
-ccg_pair_nrem = squeeze(ccg_nrem(:, unit1, unit2));
-ccg_pair_rem  = squeeze(ccg_rem(:, unit1, unit2));
-
-%% Define baseline bins (far from zero-lag, e.g., 200-500 ms)
-baselineBins = find(abs(t) > 0.2 & abs(t) < 0.5); % 200-500 ms away
-
-%% Normalize by baseline median
-norm_pair_wake = ccg_pair_wake / median(ccg_pair_wake(baselineBins));
-norm_pair_nrem = ccg_pair_nrem / median(ccg_pair_nrem(baselineBins));
-norm_pair_rem  = ccg_pair_rem  / median(ccg_pair_rem(baselineBins));
-
-%% Smooth with proper Gaussian
-sigma = 0.05; % 50 ms smoothing
-dt = t(2) - t(1); % bin width
-halfWidth = 4*sigma; 
-x = -halfWidth:dt:halfWidth;
-gaussKernel = exp(-x.^2/(2*sigma^2));
-gaussKernel = gaussKernel / sum(gaussKernel);
-
-smoothCCG = @(c) conv(c, gaussKernel, 'same');
-
-norm_pair_wake = smoothCCG(norm_pair_wake);
-norm_pair_nrem = smoothCCG(norm_pair_nrem);
-norm_pair_rem  = smoothCCG(norm_pair_rem);
-
-%% Plot
-figure('Position',[100 100 1200 400]);
-
-% Raw CCGs
-subplot(2,3,1)
-plot(t, ccg_pair_wake, 'b', 'LineWidth',1.5)
-xlabel('Time lag (s)'); ylabel('Raw count'); title('WAKE raw CCG')
-
-subplot(2,3,2)
-plot(t, ccg_pair_nrem, 'r', 'LineWidth',1.5)
-xlabel('Time lag (s)'); ylabel('Raw count'); title('NREM raw CCG')
-
-subplot(2,3,3)
-plot(t, ccg_pair_rem, 'g', 'LineWidth',1.5)
-xlabel('Time lag (s)'); ylabel('Raw count'); title('REM raw CCG')
-
-% Normalized + smoothed CCGs
-subplot(2,3,4)
-plot(t, norm_pair_wake, 'b', 'LineWidth',1.5)
-xlabel('Time lag (s)'); ylabel('Normalized'); title('WAKE normalized')
-ylim([0 3]) % baseline=1, peaks visible
-
-subplot(2,3,5)
-plot(t, norm_pair_nrem, 'r', 'LineWidth',1.5)
-xlabel('Time lag (s)'); ylabel('Normalized'); title('NREM normalized')
-ylim([0 3])
-
-subplot(2,3,6)
-plot(t, norm_pair_rem, 'g', 'LineWidth',1.5)
-xlabel('Time lag (s)'); ylabel('Normalized'); title('REM normalized')
-ylim([0 3])
+% % Choose a pair
+% unit1 = 3; % first unit index
+% unit2 = 7;  % second unit index
+% 
+% % Extract raw CCGs for this pair
+% ccg_pair_wake = squeeze(ccg_wake(:, unit1, unit2));
+% ccg_pair_nrem = squeeze(ccg_nrem(:, unit1, unit2));
+% ccg_pair_rem  = squeeze(ccg_rem(:, unit1, unit2));
+% 
+% %% Define baseline bins (far from zero-lag, e.g., 200-500 ms)
+% baselineBins = find(abs(t) > 0.2 & abs(t) < 0.5); % 200-500 ms away
+% 
+% %% Normalize by baseline median
+% norm_pair_wake = ccg_pair_wake / median(ccg_pair_wake(baselineBins));
+% norm_pair_nrem = ccg_pair_nrem / median(ccg_pair_nrem(baselineBins));
+% norm_pair_rem  = ccg_pair_rem  / median(ccg_pair_rem(baselineBins));
+% 
+% %% Smooth with proper Gaussian
+% sigma = 0.05; % 50 ms smoothing
+% dt = t(2) - t(1); % bin width
+% halfWidth = 4*sigma; 
+% x = -halfWidth:dt:halfWidth;
+% gaussKernel = exp(-x.^2/(2*sigma^2));
+% gaussKernel = gaussKernel / sum(gaussKernel);
+% 
+% smoothCCG = @(c) conv(c, gaussKernel, 'same');
+% 
+% norm_pair_wake = smoothCCG(norm_pair_wake);
+% norm_pair_nrem = smoothCCG(norm_pair_nrem);
+% norm_pair_rem  = smoothCCG(norm_pair_rem);
+% 
+% %% Plot
+% figure;
+% 
+% % Raw CCGs
+% subplot(2,3,1)
+% plot(t, ccg_pair_wake, 'b', 'LineWidth',1.5)
+% xlabel('Time lag (s)'); ylabel('Raw count'); title('WAKE raw CCG')
+% 
+% subplot(2,3,2)
+% plot(t, ccg_pair_nrem, 'r', 'LineWidth',1.5)
+% xlabel('Time lag (s)'); ylabel('Raw count'); title('NREM raw CCG')
+% 
+% subplot(2,3,3)
+% plot(t, ccg_pair_rem, 'g', 'LineWidth',1.5)
+% xlabel('Time lag (s)'); ylabel('Raw count'); title('REM raw CCG')
+% 
+% % Normalized + smoothed CCGs
+% subplot(2,3,4)
+% plot(t, norm_pair_wake, 'b', 'LineWidth',1.5)
+% xlabel('Time lag (s)'); ylabel('Normalized'); title('WAKE normalized')
+% ylim([0 3]) % baseline=1, peaks visible
+% 
+% subplot(2,3,5)
+% plot(t, norm_pair_nrem, 'r', 'LineWidth',1.5)
+% xlabel('Time lag (s)'); ylabel('Normalized'); title('NREM normalized')
+% ylim([0 3])
+% 
+% subplot(2,3,6)
+% plot(t, norm_pair_rem, 'g', 'LineWidth',1.5)
+% xlabel('Time lag (s)'); ylabel('Normalized'); title('REM normalized')
+% ylim([0 3])
 
 
 
