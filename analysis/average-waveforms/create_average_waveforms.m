@@ -235,7 +235,7 @@ end
 
 %% Save mean waveforms and cluster IDs for cell type identification (python script)
 saveFolder = '\\fsmresfiles.fsm.northwestern.edu\fsmresfiles\Basic_Sciences\Phys\SenzaiLab\Aparna\Mouse08\mean-waveforms-good-clusters';
-save(fullfile(saveFolder, 'meanWav_units.mat'), 'meanWav', 'good_clusters');
+save(fullfile(saveFolder, 'meanWav_units.mat'), 'meanWav', 'good_clusters', 'xpos', 'ypos');
 disp("Mean Waveforms Saved!")
 
 

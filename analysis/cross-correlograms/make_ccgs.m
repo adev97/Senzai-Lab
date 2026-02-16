@@ -114,8 +114,10 @@ s_nrem = Restrict(s, nremInts);
 s_rem  = Restrict(s, remInts);
 
 % variables for ccg computation
-binSize = 0.02; % s
-duration = 8; % s
+binSize = 0.001; % s (1ms bin for fine detail ccg indv plots) -- FOR HEATMAP - use 0.02s
+duration = 0.040; % s (40ms lag for fine detail ccg indv plots) -- FOR HEATMAP - use 8s
+% NOTE: this heatmap script does not work for small bin size + duration,
+% does work for 4s instead of 8s though
 
 %% Compute CCGs
 [ccg_wake, t] = CCG(s_wake(:,1), s_wake(:,2), 'binSize',binSize,'duration',duration);
@@ -151,20 +153,20 @@ end
 
 %% Visualize
 
-% Depth vs coupling
-figure
-scatter(depthDiff, coupling_nrem,'filled')
-xlabel('Depth difference (µm)')
-ylabel('NREM coupling strength')
-title('Coupling vs distance')
-
-
-% state modulation
-figure
-scatter(depthDiff, coupling_nrem - coupling_wake,'filled')
-xlabel('Depth difference (µm)')
-ylabel('NREM − WAKE coupling')
-title('Sleep-dependent coupling change')
+% % Depth vs coupling
+% figure
+% scatter(depthDiff, coupling_nrem,'filled')
+% xlabel('Depth difference (µm)')
+% ylabel('NREM coupling strength')
+% title('Coupling vs distance')
+% 
+% 
+% % state modulation
+% figure
+% scatter(depthDiff, coupling_nrem - coupling_wake,'filled')
+% xlabel('Depth difference (µm)')
+% ylabel('NREM − WAKE coupling')
+% title('Sleep-dependent coupling change')
 
 
 %% 2. PLOT HEATMAP NEW BASELINE NORMALIZATION USE THIS ONE
@@ -267,7 +269,7 @@ disp(['Cluster ' num2str(clusterB) ' → Unit ' num2str(unitB)])
 figure; hold on;
 
 colors = {'k','r','b'}; % color for each state
-nEdgeBins = 50;         % number of bins at each end to compute baseline
+nEdgeBins = nBins;         % number of bins at each end to compute baseline
 
 for s = 1:length(states)
     ccgState = all_ccgs{s};
@@ -292,7 +294,8 @@ xlim([t(1) t(end)]);
 
 
 %% Save CCG calculations
-ccgSavePath = "\\fsmresfiles.fsm.northwestern.edu\fsmresfiles\Basic_Sciences\Phys\SenzaiLab\Aparna\Mouse08\ccgs-all-units";
+ccgSavePath = "\\fsmresfiles.fsm.northwestern.edu\fsmresfiles\Basic_Sciences\Phys\SenzaiLab\Aparna\Mouse08\ccgs-all-units-40ms-Lag";
+if ~ccgSavePath
 save(fullfile(ccgSavePath, 'ccgs_all.mat'), 'ccg_wake', 'ccg_nrem', 'ccg_rem', 't');
 disp("CCGs (wake, nrem, rem) Saved!");
 

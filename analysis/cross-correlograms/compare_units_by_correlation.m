@@ -87,7 +87,7 @@ duration = 8; % s
 
 %% Load all CCGs (calculated in make_ccgs.m, saved in Mouse_08/ccgs-all-units
 
-ccg_filePath = '\\fsmresfiles.fsm.northwestern.edu\fsmresfiles\Basic_Sciences\Phys\SenzaiLab\Aparna\Mouse08\ccgs-all-units';
+ccg_filePath = '\\fsmresfiles.fsm.northwestern.edu\fsmresfiles\Basic_Sciences\Phys\SenzaiLab\Aparna\Mouse08\ccgs-all-units-40ms-Lag';
 load(fullfile(ccg_filePath, 'ccgs_all'));
 
 %% Build all the pairs - same as make_ccgs
