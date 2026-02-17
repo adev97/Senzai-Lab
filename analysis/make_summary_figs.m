@@ -225,15 +225,6 @@ for i = 1:length(pairsToPlot)
         p, clusterA, clusterB, coupling_nrem(pairIdx)), ...
         'FontSize', 16, 'FontWeight', 'bold');
     
-
-
-
-
-
-
-
-
-
 end
 
 

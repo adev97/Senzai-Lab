@@ -1,4 +1,5 @@
-%% Make cross-correlograms (CCGs) for different units to assess likelyhood of firing together
+%% make_ccgs.m
+% Make cross-correlograms (CCGs) for different units to assess likelyhood of firing together
 
 % **********************************
 % calculates CCGs from CCG.m per pair per state (wake, nrem, rem).

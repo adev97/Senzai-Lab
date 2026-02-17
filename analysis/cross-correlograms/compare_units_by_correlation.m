@@ -1,4 +1,4 @@
-%% Script to compare individual pairs of units
+%% Script to compare individual pairs of units (compare_units_by_correlation.m)
 % - which units are coupled, do they share visual features, what is their
 % cell identity, are receptive fields preserved across highly coupled pairs
 % in wake, nrem, and rem sleep
@@ -96,7 +96,7 @@ nPairs = size(pairs,1);
 depthDiff = zeros(nPairs,1);
 
 
-%% extract coupling strength per pair of units based on depth - same as make_ccgs
+%% extract coupling strength per pair of units based on depth - same as make_ccgs - added baseline normalization to this calculation
 zeroBin = ceil(length(t)/2);
 win = zeroBin-2 : zeroBin+2;
 
@@ -190,56 +190,77 @@ disp(top_rem_table)
 
 
 
-%% idk about this part
-%% Plot CCGs for top N pairs in each state
-figure;
-for i = 1:min(topN, 9)  % plot up to 9 pairs
-    subplot(3,3,i)
-    
-    % Get the pair indices
-    unitA = pairs(idx_nrem(i), 1);
-    unitB = pairs(idx_nrem(i), 2);
-    clusterA = good_clusters(unitA);
-    clusterB = good_clusters(unitB);
-    
-    % Plot CCGs for all states
-    hold on;
-    plot(t, squeeze(ccg_wake(:,unitA,unitB)), 'k', 'LineWidth', 1.5);
-    plot(t, squeeze(ccg_nrem(:,unitA,unitB)), 'r', 'LineWidth', 1.5);
-    plot(t, squeeze(ccg_rem(:,unitA,unitB)), 'b', 'LineWidth', 1.5);
-    
-    xlabel('Time lag (s)');
-    ylabel('Spike count');
-    title(sprintf('Pair #%d: Cluster %d & %d', i, clusterA, clusterB));
-    legend({'WAKE', 'NREM', 'REM'}, 'Location', 'best');
-    grid on;
-    xlim([-0.5 0.5]);  % zoom into ±500 ms
-end
 
-sgtitle('Top Coupled Pairs (sorted by NREM coupling)')
 
-%% Find pairs that are most modulated between states
-% Calculate state modulation metrics
-nrem_wake_modulation = coupling_nrem - coupling_wake;
-rem_wake_modulation = coupling_rem - coupling_wake;
-nrem_rem_modulation = coupling_nrem - coupling_rem;
 
-% Find pairs with strongest NREM enhancement
-[~, idx_nrem_enhanced] = sort(nrem_wake_modulation, 'descend');
 
-disp('=== PAIRS MOST ENHANCED DURING NREM (vs WAKE) ===')
-nrem_enhanced_table = table();
-nrem_enhanced_table.Rank = (1:topN)';
-nrem_enhanced_table.UnitA = pairs(idx_nrem_enhanced(1:topN), 1);
-nrem_enhanced_table.UnitB = pairs(idx_nrem_enhanced(1:topN), 2);
-nrem_enhanced_table.ClusterA = good_clusters(pairs(idx_nrem_enhanced(1:topN), 1));
-nrem_enhanced_table.ClusterB = good_clusters(pairs(idx_nrem_enhanced(1:topN), 2));
-nrem_enhanced_table.NREM_Coupling = coupling_nrem(idx_nrem_enhanced(1:topN));
-nrem_enhanced_table.WAKE_Coupling = coupling_wake(idx_nrem_enhanced(1:topN));
-nrem_enhanced_table.Modulation = nrem_wake_modulation(idx_nrem_enhanced(1:topN));
-nrem_enhanced_table.DepthDiff = depthDiff(idx_nrem_enhanced(1:topN));
 
-disp(nrem_enhanced_table)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+% %% idk about this part
+% %% Plot CCGs for top N pairs in each state
+% figure;
+% for i = 1:min(topN, 9)  % plot up to 9 pairs
+%     subplot(3,3,i)
+% 
+%     % Get the pair indices
+%     unitA = pairs(idx_nrem(i), 1);
+%     unitB = pairs(idx_nrem(i), 2);
+%     clusterA = good_clusters(unitA);
+%     clusterB = good_clusters(unitB);
+% 
+%     % Plot CCGs for all states
+%     hold on;
+%     plot(t, squeeze(ccg_wake(:,unitA,unitB)), 'k', 'LineWidth', 1.5);
+%     plot(t, squeeze(ccg_nrem(:,unitA,unitB)), 'r', 'LineWidth', 1.5);
+%     plot(t, squeeze(ccg_rem(:,unitA,unitB)), 'b', 'LineWidth', 1.5);
+% 
+%     xlabel('Time lag (s)');
+%     ylabel('Spike count');
+%     title(sprintf('Pair #%d: Cluster %d & %d', i, clusterA, clusterB));
+%     legend({'WAKE', 'NREM', 'REM'}, 'Location', 'best');
+%     grid on;
+%     xlim([-0.5 0.5]);  % zoom into ±500 ms
+% end
+% 
+% sgtitle('Top Coupled Pairs (sorted by NREM coupling)')
+% 
+% %% Find pairs that are most modulated between states
+% % Calculate state modulation metrics
+% nrem_wake_modulation = coupling_nrem - coupling_wake;
+% rem_wake_modulation = coupling_rem - coupling_wake;
+% nrem_rem_modulation = coupling_nrem - coupling_rem;
+% 
+% % Find pairs with strongest NREM enhancement
+% [~, idx_nrem_enhanced] = sort(nrem_wake_modulation, 'descend');
+% 
+% disp('=== PAIRS MOST ENHANCED DURING NREM (vs WAKE) ===')
+% nrem_enhanced_table = table();
+% nrem_enhanced_table.Rank = (1:topN)';
+% nrem_enhanced_table.UnitA = pairs(idx_nrem_enhanced(1:topN), 1);
+% nrem_enhanced_table.UnitB = pairs(idx_nrem_enhanced(1:topN), 2);
+% nrem_enhanced_table.ClusterA = good_clusters(pairs(idx_nrem_enhanced(1:topN), 1));
+% nrem_enhanced_table.ClusterB = good_clusters(pairs(idx_nrem_enhanced(1:topN), 2));
+% nrem_enhanced_table.NREM_Coupling = coupling_nrem(idx_nrem_enhanced(1:topN));
+% nrem_enhanced_table.WAKE_Coupling = coupling_wake(idx_nrem_enhanced(1:topN));
+% nrem_enhanced_table.Modulation = nrem_wake_modulation(idx_nrem_enhanced(1:topN));
+% nrem_enhanced_table.DepthDiff = depthDiff(idx_nrem_enhanced(1:topN));
+% 
+% disp(nrem_enhanced_table)
 
 
 
