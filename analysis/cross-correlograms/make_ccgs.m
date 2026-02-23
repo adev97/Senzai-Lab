@@ -115,8 +115,8 @@ s_nrem = Restrict(s, nremInts);
 s_rem  = Restrict(s, remInts);
 
 % variables for ccg computation
-binSize = 0.001; % s (1ms bin for fine detail ccg indv plots) -- FOR HEATMAP - use 0.02s
-duration = 0.040; % s (40ms lag for fine detail ccg indv plots) -- FOR HEATMAP - use 8s
+binSize = 0.020; % s (1ms bin for fine detail ccg indv plots) -- FOR HEATMAP - use 0.02s
+duration = 4; % s (40ms lag for fine detail ccg indv plots) -- FOR HEATMAP - use 8s
 % NOTE: this heatmap script does not work for small bin size + duration,
 % does work for 4s instead of 8s though
 
@@ -251,8 +251,8 @@ end
 %% Plot CCG for one pair across all states with baseline normalization
 
 % Specify the original cluster IDs you want to examine
-clusterA = 63;  % original Kilosort cluster ID
-clusterB = 415;  % original Kilosort cluster ID
+clusterA = 89;  % original Kilosort cluster ID
+clusterB = 267;  % original Kilosort cluster ID
 
 % Convert to unit IDs
 unitA = find(good_clusters == clusterA);
