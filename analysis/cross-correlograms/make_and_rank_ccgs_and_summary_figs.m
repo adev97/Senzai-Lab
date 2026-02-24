@@ -344,8 +344,8 @@ for k = 1:topN
     rfA_off = mean(RFmap{uA}.OFF.OnSet,3) - RFmap{uA}.baseline;
     rfB_off = mean(RFmap{uB}.OFF.OnSet,3) - RFmap{uB}.baseline;
     
-    rf_similarity_on(i)  = corr(rfA_on(:),  rfB_on(:));
-    rf_similarity_off(i) = corr(rfA_off(:), rfB_off(:));
+    rf_similarity_on(k)  = corr(rfA_on(:),  rfB_on(:));
+    rf_similarity_off(k) = corr(rfA_off(:), rfB_off(:));
     
 end
 
@@ -462,10 +462,12 @@ end
 
 validIdx = ~isnan(rf_overlap_on) & ~isnan(coupling_wake_sorted);
 
-x_data = rf_overlap_on(validIdx);
-x_data_off = rf_overlap_off(validIdx);
-y_data = coupling_wake_sorted(validIdx);
-y_data_off = coupling_wake_sorted(validIdx);
+num_to_plot = min(500, sum(validIdx));
+
+x_data = rf_overlap_on(1:num_to_plot);
+x_data_off = rf_overlap_off(1:num_to_plot);
+y_data = coupling_wake_sorted(1:num_to_plot);
+y_data_off = coupling_wake_sorted(1:num_to_plot);
 
 %% FOR ON
 % Calculate Correlation

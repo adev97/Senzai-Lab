@@ -94,7 +94,7 @@ for j = 1:topN
    
     % ===== Unit A ON RF =====
     subplot(6,2,9);
-    rfA_on = sum(RFmap{unitA}.ON.OnSet,3) - RFmap{unitA}.baseline;
+    rfA_on = mean(RFmap{unitA}.ON.OnSet,3) - RFmap{unitA}.baseline;
     imagesc(rfA_on);
     axis image off
     title(sprintf('Cluster %d - ON RF', clusterA));
@@ -102,7 +102,7 @@ for j = 1:topN
     
     % ===== Unit A OFF RF =====
     subplot(6,2,11);
-    rfA_off = sum(RFmap{unitA}.OFF.OnSet,3) - RFmap{unitA}.baseline;
+    rfA_off = mean(RFmap{unitA}.OFF.OnSet,3) - RFmap{unitA}.baseline;
     imagesc(rfA_off);
     axis image off
     title(sprintf('Cluster %d -s OFF RF', clusterA));
@@ -122,7 +122,7 @@ for j = 1:topN
 
     % ===== Unit B ON RF =====
     subplot(6,2,10);
-    rfB_on = sum(RFmap{unitB}.ON.OnSet,3) - RFmap{unitB}.baseline;
+    rfB_on = mean(RFmap{unitB}.ON.OnSet,3) - RFmap{unitB}.baseline;
     imagesc(rfB_on);
     axis image off
     title(sprintf('Cluster %d - ON RF', clusterB));
@@ -130,7 +130,7 @@ for j = 1:topN
 
     % ===== Unit B OFF RF =====
     subplot(6,2,12);
-    rfB_off = sum(RFmap{unitB}.OFF.OnSet,3) - RFmap{unitB}.baseline;
+    rfB_off = mean(RFmap{unitB}.OFF.OnSet,3) - RFmap{unitB}.baseline;
     imagesc(rfB_off);
     axis image off
     title(sprintf('Cluster %d - OFF RF', clusterB));
