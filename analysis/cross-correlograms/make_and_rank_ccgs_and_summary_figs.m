@@ -508,27 +508,37 @@ title(sprintf('Functional Coupling vs. Spatial Overlap\nr = %.3f (p = %.2e)', r,
 grid on;
 
 
-% Example for the Top 1 Pair
+%% Correct way to plot the Top 1 Pair
 k = 1; 
-uA = topPairs(k,1); uB = topPairs(k,2);
+uA = topPairs(k,1); 
+uB = topPairs(k,2);
 
-% Re-generate masks for visualization
-m1 = maskA_on;
-m2 = maskB_on;
+% 1. Re-generate the smoothed maps for these specific units
+rfA_top = imgaussfilt(mean(RFmap{uA}.ON.OnSet,3) - RFmap{uA}.baseline, sigma);
+rfB_top = imgaussfilt(mean(RFmap{uB}.ON.OnSet,3) - RFmap{uB}.baseline, sigma);
 
-% Create RGB image [Height x Width x 3]
-sz = size(m1);
-overlayImg = zeros(sz(1), sz(2), 3);
-overlayImg(:,:,1) = m1; % Red channel
-overlayImg(:,:,2) = m2; % Green channel
+% 2. Re-generate the masks
+m1 = rfA_top >= prctile(rfA_top(:), 80);
+m2 = rfB_top >= prctile(rfB_top(:), 80);
+
+% 3. Create RGB image
+overlayImg = zeros(size(m1,1), size(m1,2), 3);
+overlayImg(:,:,1) = m1; % Red
+overlayImg(:,:,2) = m2; % Green
 
 figure('Color', 'w');
 imshow(overlayImg); 
-title(sprintf('RF Overlap Pair %d (Cluster %d & %d)\nYellow = Shared Space', ...
-    k, good_clusters(uA), good_clusters(uB)));
-axis on;
+title(sprintf('TOP RANKED PAIR (#%d)\nCluster %d & %d', k, good_clusters(uA), good_clusters(uB)));
 
+%% New function call include overlap RFs in the summary pdf
+pngOutputDir = '\\fsmresfiles.fsm.northwestern.edu\fsmresfiles\Basic_Sciences\Phys\SenzaiLab\Aparna\Mouse08\MEAN-WITH-OVERLAP-NEW_PAIR_SUMMARIES_COUPLED_UNITS_WITH_RF';
+if ~exist(pngOutputDir,'dir'), mkdir(pngOutputDir); end
 
+makePairSummaryPNGsPlusCorrRFs(all_ccgs, t, rankedPairs, good_clusters, ...
+                         coupling_wake_sorted, coupling_nrem_sorted, coupling_rem_sorted, ...
+                         unitDepth, meanWav, cell_type, ...
+                         xpos, ypos, sr, ...
+                         sortBy, topN, pngOutputDir, RFmap);
 
 
 
