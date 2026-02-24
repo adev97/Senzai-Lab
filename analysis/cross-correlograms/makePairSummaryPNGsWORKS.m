@@ -105,7 +105,7 @@ for j = 1:topN
     rfA_off = sum(RFmap{unitA}.OFF.OnSet,3) - RFmap{unitA}.baseline;
     imagesc(rfA_off);
     axis image off
-    title(sprintf('Cluster %d - OFF RF', clusterA));
+    title(sprintf('Cluster %d -s OFF RF', clusterA));
     colorbar
 
     % ===== Unit B waveform =====

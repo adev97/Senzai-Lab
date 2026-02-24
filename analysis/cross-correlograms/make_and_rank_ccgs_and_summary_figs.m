@@ -126,10 +126,10 @@ fprintf('Computing 1ms/2s CCGs...\n');
 fprintf('CCGs done.\n');
 
 %% Save CCGs and t
-ccgSavePath = "\\fsmresfiles.fsm.northwestern.edu\fsmresfiles\Basic_Sciences\Phys\SenzaiLab\Aparna\Mouse08\ccgs-1ms-2s";
-save(fullfile(ccgSavePath, 'ccgs.mat'), "ccg_wake", "ccg_nrem", "ccg_rem", "t");
-
-load(fullfile(ccgSavePath, "ccgs.mat"))
+% ccgSavePath = "\\fsmresfiles.fsm.northwestern.edu\fsmresfiles\Basic_Sciences\Phys\SenzaiLab\Aparna\Mouse08\ccgs-1ms-2s";
+% save(fullfile(ccgSavePath, 'ccgs.mat'), "ccg_wake", "ccg_nrem", "ccg_rem", "t");
+% 
+% load(fullfile(ccgSavePath, "ccgs.mat"))
 
 %% Build pairs and calculate normalized CCGs
 pairs  = nchoosek(1:nClusters, 2);
@@ -192,8 +192,72 @@ end
 
 fprintf('Baseline-median normalized coupling complete.\n');
 
+%% ---------------- Comparision of whether units coupled in wake are coupled in nrem or rem
+%% wake and nrem
+validAll = ~isnan(coupling_wake) & ~isnan(coupling_nrem);
 
-%% Rank pairs (most to least coupled based on wake)
+figure('Color', 'w', 'Position', [100, 100, 500, 500]);
+scatter(coupling_wake(validAll), coupling_nrem(validAll), 20, 'filled', 'MarkerFaceAlpha', 0.4);
+hold on;
+
+% Add Unity Line (where Wake = NREM)
+maxVal = max([coupling_wake(validAll); coupling_nrem(validAll)]);
+minVal = min([coupling_wake(validAll); coupling_nrem(validAll)]);
+plot([minVal maxVal], [minVal maxVal], 'k--', 'LineWidth', 1.5);
+
+xlabel('Wake Coupling Strength');
+ylabel('NREM Coupling Strength');
+title('Coupling Wake and NREM');
+grid on; axis square;
+
+% Calculate Correlation
+[r, p] = corr(coupling_wake(validAll), coupling_nrem(validAll));
+legend(sprintf('r = %.3f, p = %.3e', r, p), 'Unity Line', 'Location', 'northwest');
+
+%% wake and rem
+validAll = ~isnan(coupling_wake) & ~isnan(coupling_rem);
+
+figure('Color', 'w', 'Position', [100, 100, 500, 500]);
+scatter(coupling_wake(validAll), coupling_rem(validAll), 20, 'filled', 'MarkerFaceAlpha', 0.4);
+hold on;
+
+% Add Unity Line (where Wake = NREM)
+maxVal = max([coupling_wake(validAll); coupling_rem(validAll)]);
+minVal = min([coupling_wake(validAll); coupling_rem(validAll)]);
+plot([minVal maxVal], [minVal maxVal], 'k--', 'LineWidth', 1.5);
+
+xlabel('Wake Coupling Strength');
+ylabel('REM Coupling Strength');
+title('Coupling Wake and REM');
+grid on; axis square;
+
+% Calculate Correlation
+[r, p] = corr(coupling_wake(validAll), coupling_rem(validAll));
+legend(sprintf('r = %.3f, p = %.3e', r, p), 'Unity Line', 'Location', 'northwest');
+
+%% nrem and rem
+validAll = ~isnan(coupling_rem) & ~isnan(coupling_nrem);
+
+figure('Color', 'w', 'Position', [100, 100, 500, 500]);
+scatter(coupling_nrem(validAll), coupling_rem(validAll), 20, 'filled', 'MarkerFaceAlpha', 0.4);
+hold on;
+
+% Add Unity Line (where Wake = NREM)
+maxVal = max([coupling_nrem(validAll); coupling_rem(validAll)]);
+minVal = min([coupling_nrem(validAll); coupling_rem(validAll)]);
+plot([minVal maxVal], [minVal maxVal], 'k--', 'LineWidth', 1.5);
+
+xlabel('NREM Coupling Strength');
+ylabel('REM Coupling Strength');
+title('Coupling NREM and REM');
+grid on; axis square;
+
+% Calculate Correlation
+[r, p] = corr(coupling_nrem(validAll), coupling_rem(validAll));
+legend(sprintf('r = %.3f, p = %.3e', r, p), 'Unity Line', 'Location', 'northwest');
+
+
+%% ----------- Rank pairs (most to least coupled based on wake)
 
 % Only keep non-NaN pairs
 validIdx = ~isnan(coupling_wake);
@@ -211,10 +275,10 @@ for k = 1:topN
     fprintf('Pair %d: (%d, %d) -> %.2f\n', k, rankedPairs(k,1), rankedPairs(k,2), sortedCoupling(k));
 end
 
-%% Make summary plots for the 30 highest coupled pairs)
+%% ------- Make summary plots for the 30 highest coupled pairs)
 
 % load needed files (meanWav and cell id type)
-pngOutputDir = '\\fsmresfiles.fsm.northwestern.edu\fsmresfiles\Basic_Sciences\Phys\SenzaiLab\Aparna\Mouse08\TEST-NEW_PAIR_SUMMARIES_COUPLED_UNITS_WITH_RF';
+pngOutputDir = '\\fsmresfiles.fsm.northwestern.edu\fsmresfiles\Basic_Sciences\Phys\SenzaiLab\Aparna\Mouse08\SUM-NEW_PAIR_SUMMARIES_COUPLED_UNITS_WITH_RF';
 if ~exist(pngOutputDir,'dir'), mkdir(pngOutputDir); end
 
 % Load additional data needed for the function
@@ -246,7 +310,7 @@ coupling_rem_sorted  = coupling_rem_sorted(sortIdx);
 all_ccgs = {ccg_wake, ccg_nrem, ccg_rem};
 
 sortBy = 'wake';
-topN   = 30;
+topN   = 60;
 
 %% Load RF map data for this mouse
 load("\\fsmresfiles.fsm.northwestern.edu\fsmresfiles\Basic_Sciences\Phys\SenzaiLab\Aparna\Mouse08_RFMapping\RF_maps\Spike_Data\Mouse08_20251007_810to2250_RFmap_SpikeRate.mat")
@@ -260,46 +324,261 @@ makePairSummaryPNGsWORKS(all_ccgs, t, rankedPairs, good_clusters, ...
                          sortBy, topN, pngOutputDir, RFmap);
 
 
-%% Comparision of receptive fields for ON and OFF separately between coupled pairs
+%% ------- Comparision of receptive fields for ON and OFF separately between coupled pairs
 
-%% 1. Compare full receptive field matrix, pearson correlation
+%% 1. Compare full receptive field matrix, pearson correlation -- results in a lot of zeros
 
 topPairs = rankedPairs(1:topN,:);
 
-RFsim_ON  = nan(topN,1);
-RFsim_OFF = nan(topN,1);
+rf_similarity_on  = zeros(topN,1);
+rf_similarity_off = zeros(topN,1);
 
 for k = 1:topN
     
-    i = topPairs(k,1);
-    j = topPairs(k,2);
+    uA = topPairs(k,1);
+    uB = topPairs(k,2);
     
-    RF_i_ON  = RFmap(i).ON;
-    RF_j_ON  = RFmap(j).ON;
+    rfA_on  = mean(RFmap{uA}.ON.OnSet,3)  - RFmap{uA}.baseline;
+    rfB_on  = mean(RFmap{uB}.ON.OnSet,3)  - RFmap{uB}.baseline;
+
+    rfA_off = mean(RFmap{uA}.OFF.OnSet,3) - RFmap{uA}.baseline;
+    rfB_off = mean(RFmap{uB}.OFF.OnSet,3) - RFmap{uB}.baseline;
     
-    RF_i_OFF = RFmap(i).OFF;
-    RF_j_OFF = RFmap(j).OFF;
-    
-    % Remove NaNs if present
-    valid_ON  = ~isnan(RF_i_ON)  & ~isnan(RF_j_ON);
-    valid_OFF = ~isnan(RF_i_OFF) & ~isnan(RF_j_OFF);
-    
-    RFsim_ON(k)  = corr(RF_i_ON(valid_ON),  RF_j_ON(valid_ON));
-    RFsim_OFF(k) = corr(RF_i_OFF(valid_OFF), RF_j_OFF(valid_OFF));
+    rf_similarity_on(i)  = corr(rfA_on(:),  rfB_on(:));
+    rf_similarity_off(i) = corr(rfA_off(:), rfB_off(:));
     
 end
 
+figure;
+scatter(rf_similarity_on, coupling_wake_sorted(1:topN))
+xlabel('RF similarity (ON)')
+ylabel('Coupling (wake)')
 
-
+figure;
+scatter(rf_similarity_off, coupling_wake_sorted(1:topN))
+xlabel('RF similarity (OFF)')
+ylabel('Coupling (wake)')
 
 %% 2. Compare only distance between RF centers (peak positons)
+% % use abs to make it polarity independent
+% [~, idxA] = max(abs(rfA_on(:)));
+% [yA, xA]  = ind2sub(size(rfA_on), idxA);
+% 
+% [~, idxB] = max(abs(rfB_on(:)));
+% [yB, xB]  = ind2sub(size(rfB_on), idxB);
+% 
+% % compute peak distance (by pixel)
+% peakDist = sqrt((xA - xB)^2 + (yA - yB)^2);
+% 
+% thresholdA = prctile(abs(rfA_on(:)), 95);
+% maskA = abs(rfA_on) > thresholdA;
+% 
+% thresholdB = prctile(abs(rfB_on(:)), 95);
+% maskB = abs(rfB_on) > thresholdB;
+% 
+% overlap = sum(maskA(:) & maskB(:)) / sum(maskA(:) | maskB(:));
 
 %% 3. Compare RF overlap
 
+% Parameters
+nPairsToRun = size(rankedPairs, 1);
+topPairs = rankedPairs(1:topN,:);
+sigma = 1.2; % Smoothing factor for RF maps
+
+% Preallocate
+rf_overlap_on   = zeros(nPairsToRun,1);
+rf_overlap_off  = zeros(nPairsToRun,1);
+centroid_dist_on   = zeros(nPairsToRun,1); 
+centroid_dist_off   = zeros(nPairsToRun,1);
+
+for k = 1:nPairsToRun
+    uA = rankedPairs(k,1);
+    uB = rankedPairs(k,2);
+    
+    % 1. Process RFs: Mean across time, subtract baseline, and Smooth
+    % Smoothing helps the thresholding identify 'blobs' rather than single pixels
+    rfA_on  = imgaussfilt(mean(RFmap{uA}.ON.OnSet,3)  - RFmap{uA}.baseline, sigma);
+    rfB_on  = imgaussfilt(mean(RFmap{uB}.ON.OnSet,3)  - RFmap{uB}.baseline, sigma);
+    rfA_off = imgaussfilt(mean(RFmap{uA}.OFF.OnSet,3) - RFmap{uA}.baseline, sigma);
+    rfB_off = imgaussfilt(mean(RFmap{uB}.OFF.OnSet,3) - RFmap{uB}.baseline, sigma);
+    
+    % 2. Thresholding (Top 20% of signal)
+    threshA_on = prctile(rfA_on(:), 80);
+    threshB_on = prctile(rfB_on(:), 80);
+    threshA_off = prctile(rfA_off(:), 80);
+    threshB_off = prctile(rfB_off(:), 80);
+    
+    maskA_on = rfA_on >= threshA_on;
+    maskB_on = rfB_on >= threshB_on;
+    maskA_off = rfA_off >= threshA_off;
+    maskB_off = rfB_off >= threshB_off;
+
+    % 3. Calculate Jaccard Overlap (Intersection over Union)
+    intersection = sum(maskA_on(:) & maskB_on(:));
+    union_area_on   = sum(maskA_on(:) | maskB_on(:));
+    if union_area_on > 0
+        rf_overlap_on(k) = intersection / union_area_on;
+    else
+        rf_overlap_on(k) = 0;
+    end
+
+    intersection_off = sum(maskA_off(:) & maskB_off(:));
+    union_area_off   = sum(maskA_off(:) | maskB_off(:));
+    if union_area_off > 0
+        rf_overlap_off(k) = intersection / union_area_off;
+    else
+        rf_overlap_off(k) = 0;
+    end
+    
+    % 4. Calculate Centroid Distance (The 'Center' of their representation)
+    % We use regionprops on the binary mask to find the center of mass
+    statsA_on = regionprops(maskA_on, 'Centroid');
+    statsB_on = regionprops(maskB_on, 'Centroid');
+    
+    if ~isempty(statsA_on) && ~isempty(statsB_on)
+        % Take the largest blob if multiple exist
+        cA = statsA_on(1).Centroid; 
+        cB = statsB_on(1).Centroid;
+        centroid_dist_on(k) = sqrt((cA(1)-cB(1))^2 + (cA(2)-cB(2))^2);
+    else
+        centroid_dist_on(k) = NaN;
+    end
+
+    statsA_off = regionprops(maskA_off, 'Centroid');
+    statsB_off = regionprops(maskB_off, 'Centroid');
+    
+    if ~isempty(statsA_off) && ~isempty(statsB_off)
+        % Take the largest blob if multiple exist
+        cA = statsA_off(1).Centroid; 
+        cB = statsB_off(1).Centroid;
+        centroid_dist_off(k) = sqrt((cA(1)-cB(1))^2 + (cA(2)-cB(2))^2);
+    else
+        centroid_dist_off(k) = NaN;
+    end
+
+end
+
+%% make scatter for all units (rf overlap vs coupling strength)
+
+validIdx = ~isnan(rf_overlap_on) & ~isnan(coupling_wake_sorted);
+
+x_data = rf_overlap_on(validIdx);
+x_data_off = rf_overlap_off(validIdx);
+y_data = coupling_wake_sorted(validIdx);
+y_data_off = coupling_wake_sorted(validIdx);
+
+%% FOR ON
+% Calculate Correlation
+[r, p] = corr(x_data, y_data);
+
+figure('Color', 'w', 'Position', [100, 100, 800, 800]);
+% Use 'binscatter' if you have many points, or 'scatter' with transparency
+scatter(x_data, y_data, 20, 'filled', 'MarkerFaceAlpha', 0.3, 'MarkerFaceColor', [0 0.45 0.74]);
+hold on;
+
+% Add a trend line (Linear Regression)
+coeffs = polyfit(x_data, y_data, 1);
+fitX = linspace(min(x_data), max(x_data), 100);
+fitY = polyval(coeffs, fitX);
+plot(fitX, fitY, 'k', 'LineWidth', 1);
+
+xlabel('ON RF Overlap (Jaccard Index)');
+ylabel('Wake Coupling Strength');
+title(sprintf('Functional Coupling vs. Spatial Overlap\nr = %.3f (p = %.2e)', r, p));
+grid on;
+
+%% FOR OFF
+% Calculate Correlation
+[r, p] = corr(x_data_off, y_data_off);
+
+figure('Color', 'w', 'Position', [100, 100, 800, 800]);
+% Use 'binscatter' if you have many points, or 'scatter' with transparency
+scatter(x_data_off, y_data_off, 20, 'filled', 'MarkerFaceAlpha', 0.3, 'MarkerFaceColor', [0.85 0.33 0.1]);
+hold on;
+
+% Add a trend line (Linear Regression)
+coeffs = polyfit(x_data_off, y_data_off, 1);
+fitX = linspace(min(x_data_off), max(x_data_off), 100);
+fitY = polyval(coeffs, fitX);
+plot(fitX, fitY, 'k', 'LineWidth', 1);
+
+xlabel('OFF RF Overlap (Jaccard Index)');
+ylabel('Wake Coupling Strength');
+title(sprintf('Functional Coupling vs. Spatial Overlap\nr = %.3f (p = %.2e)', r, p));
+grid on;
+
+
+% Example for the Top 1 Pair
+k = 1; 
+uA = topPairs(k,1); uB = topPairs(k,2);
+
+% Re-generate masks for visualization
+m1 = maskA_on;
+m2 = maskB_on;
+
+% Create RGB image [Height x Width x 3]
+sz = size(m1);
+overlayImg = zeros(sz(1), sz(2), 3);
+overlayImg(:,:,1) = m1; % Red channel
+overlayImg(:,:,2) = m2; % Green channel
+
+figure('Color', 'w');
+imshow(overlayImg); 
+title(sprintf('RF Overlap Pair %d (Cluster %d & %d)\nYellow = Shared Space', ...
+    k, good_clusters(uA), good_clusters(uB)));
+axis on;
 
 
 
 
+
+
+
+
+% topPairs = rankedPairs(1:topN,:);
+% 
+% rf_overlap_on  = zeros(topN,1);
+% rf_overlap_off = zeros(topN,1);
+% 
+% for k = 1:topN
+% 
+%     uA = topPairs(k,1);
+%     uB = topPairs(k,2);
+% 
+%     % Collapse RF over time using mean
+%     rfA_on  = mean(RFmap{uA}.ON.OnSet,3)  - RFmap{uA}.baseline;
+%     rfB_on  = mean(RFmap{uB}.ON.OnSet,3)  - RFmap{uB}.baseline;
+% 
+%     rfA_off = mean(RFmap{uA}.OFF.OnSet,3) - RFmap{uA}.baseline;
+%     rfB_off = mean(RFmap{uB}.OFF.OnSet,3) - RFmap{uB}.baseline;
+% 
+%     % 80th percentile threshold (keep top 20%)
+%     threshA_on  = prctile(abs(rfA_on(:)), 80);
+%     threshB_on  = prctile(abs(rfB_on(:)), 80);
+% 
+%     threshA_off = prctile(abs(rfA_off(:)), 80);
+%     threshB_off = prctile(abs(rfB_off(:)), 80);
+% 
+%     % Binary masks
+%     maskA_on  = abs(rfA_on)  >= threshA_on;
+%     maskB_on  = abs(rfB_on)  >= threshB_on;
+% 
+%     maskA_off = abs(rfA_off) >= threshA_off;
+%     maskB_off = abs(rfB_off) >= threshB_off;
+% 
+%     % Jaccard overlap
+%     rf_overlap_on(k) = sum(maskA_on(:) & maskB_on(:)) / ...
+%                        sum(maskA_on(:) | maskB_on(:));
+% 
+%     rf_overlap_off(k) = sum(maskA_off(:) & maskB_off(:)) / ...
+%                         sum(maskA_off(:) | maskB_off(:));
+% 
+% end
+% 
+% figure;
+% scatter(rf_overlap_on, coupling_wake_sorted(1:topN))
+% xlabel('ON RF overlap (top 20%)')
+% ylabel('Coupling strength (wake)')
 
 
 
