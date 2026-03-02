@@ -117,7 +117,7 @@ fprintf('  REM : %d / %d\n', sum(firingRate_rem  < minFiringRate), nClusters);
 % fill those pairs them with NaNs
 
 binSize  = 0.001; % 1ms bins
-duration = 2; % 2s total window
+duration = 1; % 2s total window
 
 fprintf('Computing 1ms/2s CCGs...\n');
 [ccg_wake, t] = CCG(s_wake(:,1), s_wake(:,2), 'binSize', binSize, 'duration', duration);
@@ -125,72 +125,248 @@ fprintf('Computing 1ms/2s CCGs...\n');
 [ccg_rem,  ~] = CCG(s_rem(:,1),  s_rem(:,2),  'binSize', binSize, 'duration', duration);
 fprintf('CCGs done.\n');
 
+all_ccgs = {ccg_wake, ccg_nrem, ccg_rem};
+states = {'WAKE', 'NREM', 'REM'};
+nStates = length(states);
+
+nBins = size(ccg_wake, 1);
+[nTimeBins, nUnits, ~] = size(ccg_wake);
+
 %% Save CCGs and t
 % ccgSavePath = "\\fsmresfiles.fsm.northwestern.edu\fsmresfiles\Basic_Sciences\Phys\SenzaiLab\Aparna\Mouse08\ccgs-1ms-2s";
 % save(fullfile(ccgSavePath, 'ccgs.mat'), "ccg_wake", "ccg_nrem", "ccg_rem", "t");
 % 
 % load(fullfile(ccgSavePath, "ccgs.mat"))
 
-%% Build pairs and calculate normalized CCGs
-pairs  = nchoosek(1:nClusters, 2);
+%% REDO THIS TO FIX NORMALIZATION Build pairs and calculate normalized CCGs
+zeroBin = ceil(nTimeBins/2);
+
+halfWidthBins = 2;   % ±2 bins = ±5 ms if binSize=1ms
+
+centerWin = (zeroBin-halfWidthBins):(zeroBin+halfWidthBins);
+
+pairs = nchoosek(1:nClusters, 2);
 nPairs = size(pairs,1);
+nEdgeBins = nBins;
 
-coupling_wake = nan(nPairs,1);
-coupling_nrem = nan(nPairs,1);
-coupling_rem  = nan(nPairs,1);
+% depthDiff = zeros(nPairs,1);
 
-% Define windows
-% zero lag window (±5 ms)
-zeroBin = ceil(length(t)/2);
-centerWin = zeroBin-5 : zeroBin+5;
+all_ccgs_normalized = cell(size(all_ccgs));
 
-% baseline = last 500 ms
-baselineMask = abs(t) >= 0.5;
+coupling_wake = zeros(nUnits, nUnits);
+coupling_nrem = zeros(nUnits, nUnits);
+coupling_rem  = zeros(nUnits, nUnits);
 
-% Normalized Coupling
-for p = 1:nPairs
+leftBins  = 1:(centerWin(1)-1);
+rightBins = (centerWin(end)+1):nTimeBins;
+baselineBins = [leftBins rightBins];
+        
+
+for s = 1:nStates
     
-    i = pairs(p,1);
-    j = pairs(p,2);
+    fprintf('Normalizing %s CCGs...\n', states{s});
     
-    % ---- WAKE ----
-    if firingRate_wake(i) >= minFiringRate && firingRate_wake(j) >= minFiringRate
-        ccg_pair = squeeze(ccg_wake(:,i,j));
-        baseline = median(ccg_pair(baselineMask));
-        if baseline > 0
-            centerVal = mean(ccg_pair(centerWin));
-            coupling_wake(p) = centerVal / baseline - 1;
-        else
-            coupling_wake(p) = 0;
+    ccgState = all_ccgs{s};
+    
+    % allocate normalized matrix same size
+    ccgNormState = zeros(size(ccgState));
+    
+    for pp = 1:nPairs
+        
+        a = pairs(pp,1);
+        b = pairs(pp,2);
+        
+        % extract pair CCG
+        ccgPair = squeeze(ccgState(:,a,b));
+        
+        % compute baseline from edges (excluding center)
+        % baseline = median(ccgPair(baselineBins)); %%%
+        baseline = median(ccgPair);   % FULL window median like yutas script
+
+        % protect against artificial blowups
+        % baseline = max(baseline, 1e-6);
+        if baseline == 0
+            continue   % skip this pair entirely
         end
+
+        % prevent divide-by-zero
+        if baseline == 0
+            baseline = eps;
+        end
+        
+        % normalize FULL CCG
+        % ccgNorm = ccgPair - baseline; % %%% subtraction baseline calculation (was division before and made huge blowups)
+        ccgNorm = ccgPair / baseline;
+
+        % store normalized CCG
+        ccgNormState(:,a,b) = ccgNorm;
+        ccgNormState(:,b,a) = flipud(ccgNorm); % maintain symmetry
+        
+        % compute scalar coupling from normalized CCG center window
+        couplingValue = mean(ccgNorm(centerWin));
+        
+        switch s
+            case 1
+                coupling_wake(a,b) = couplingValue;
+                coupling_wake(b,a) = couplingValue;
+            case 2
+                coupling_nrem(a,b) = couplingValue;
+                coupling_nrem(b,a) = couplingValue;
+            case 3
+                coupling_rem(a,b) = couplingValue;
+                coupling_rem(b,a) = couplingValue;
+        end
+        
     end
     
-    % ---- NREM ----
-    if firingRate_nrem(i) >= minFiringRate && firingRate_nrem(j) >= minFiringRate
-        ccg_pair = squeeze(ccg_nrem(:,i,j));
-        baseline = median(ccg_pair(baselineMask));
-        if baseline > 0
-            centerVal = mean(ccg_pair(centerWin));
-            coupling_nrem(p) = centerVal / baseline - 1;
-        else
-            coupling_nrem(p) = 0;
-        end
-    end
+    % store normalized state
+    all_ccgs_normalized{s} = ccgNormState;
     
-    % ---- REM ----
-    if firingRate_rem(i) >= minFiringRate && firingRate_rem(j) >= minFiringRate
-        ccg_pair = squeeze(ccg_rem(:,i,j));
-        baseline = median(ccg_pair(baselineMask));
-        if baseline > 0
-            centerVal = mean(ccg_pair(centerWin));
-            coupling_rem(p) = centerVal / baseline - 1;
-        else
-            coupling_rem(p) = 0;
-        end
-    end
 end
 
-fprintf('Baseline-median normalized coupling complete.\n');
+fprintf('Normalization and coupling calculation complete.\n');
+
+
+% pairs = nchoosek(1:nClusters,2);
+% nPairs = size(pairs,1);
+% depthDiff = zeros(nPairs,1);
+% 
+% nEdgeBins = nBins;
+% 
+% % define center window (e.g., ±5 ms around 0 lag)
+% zeroBin = ceil(length(t)/2);
+% centerWin = zeroBin-5 : zeroBin+5;  % adjust width as needed
+% 
+% % define baseline as edge bins (all except center)
+% baselineMask = true(size(t));
+% baselineMask(centerWin) = false;  % exclude center bins for baseline
+% 
+% all_ccgs_normalized = cell(size(all_ccgs));  % same structure {wake, nrem, rem}
+% 
+% % Preallocate scalar coupling arrays (nUnits x nUnits)
+% [nTimeBins, nUnits, ~] = size(all_ccgs{1});
+% coupling_wake = zeros(nUnits, nUnits);
+% coupling_nrem = zeros(nUnits, nUnits);
+% coupling_rem  = zeros(nUnits, nUnits);
+% 
+% for s = 1:3
+%     ccgState = all_ccgs{s};
+% 
+%     % Compute baseline per pair
+%     baseline = median(ccgState(edgeBins,:,:), 1);  % [1 x nUnits x nUnits]
+% 
+%     % Normalize the full CCG
+%     all_ccgs_normalized{s} = ccgState ./ baseline;
+% 
+%     % Compute scalar coupling in center window
+%     centerMean = mean(all_ccgs_normalized{s}(centerWin,:,:), 1); % [1 x nUnits x nUnits]
+% 
+%     switch s
+%         case 1
+%             coupling_wake = squeeze(centerMean);
+%         case 2
+%             coupling_nrem = squeeze(centerMean);
+%         case 3
+%             coupling_rem  = squeeze(centerMean);
+%     end
+% end
+
+% for pp = 1:nPairs
+%         i = pairs(p,1);
+%     j = pairs(p,2);
+% 
+%     % ---- WAKE ----
+%     if firingRate_wake(i) >= minFiringRate && firingRate_wake(j) >= minFiringRate
+%         ccg_pair = squeeze(ccg_wake(:,i,j));
+%         baseline = median(ccg_pair(baselineMask));
+%         centerVal = mean(ccg_pair(centerWin));
+%         if baseline > 0
+%             coupling_wake(p) = centerVal / baseline;  % fold change
+%         end
+%     end
+% 
+%     % ---- NREM ----
+%     if firingRate_nrem(i) >= minFiringRate && firingRate_nrem(j) >= minFiringRate
+%         ccg_pair = squeeze(ccg_nrem(:,i,j));
+%         baseline = median(ccg_pair(baselineMask));
+%         centerVal = mean(ccg_pair(centerWin));
+%         if baseline > 0
+%             coupling_nrem(p) = centerVal / baseline;  % fold change
+%         end
+%     end
+% 
+%     % ---- REM ----
+%     if firingRate_rem(i) >= minFiringRate && firingRate_rem(j) >= minFiringRate
+%         ccg_pair = squeeze(ccg_rem(:,i,j));
+%         baseline = median(ccg_pair(baselineMask));
+%         centerVal = mean(ccg_pair(centerWin));
+%         if baseline > 0
+%             coupling_rem(p) = centerVal / baseline;  % fold change
+%         end
+%     end
+% end
+
+
+%% Build pairs and calculate normalized CCGs
+% pairs  = nchoosek(1:nClusters, 2);
+% nPairs = size(pairs,1);
+% 
+% coupling_wake = nan(nPairs,1);
+% coupling_nrem = nan(nPairs,1);
+% coupling_rem  = nan(nPairs,1);
+% 
+% % Define windows
+% % zero lag window (±5 ms)
+% zeroBin = ceil(length(t)/2);
+% centerWin = zeroBin-5 : zeroBin+5;
+% 
+% % baseline = last 500 ms
+% baselineMask = abs(t) >= 0.5;
+% 
+% % Normalized Coupling
+% for p = 1:nPairs
+% 
+%     i = pairs(p,1);
+%     j = pairs(p,2);
+% 
+%     % ---- WAKE ----
+%     if firingRate_wake(i) >= minFiringRate && firingRate_wake(j) >= minFiringRate
+%         ccg_pair = squeeze(ccg_wake(:,i,j));
+%         baseline = median(ccg_pair(baselineMask));
+%         if baseline > 0
+%             centerVal = mean(ccg_pair(centerWin));
+%             coupling_wake(p) = centerVal / baseline - 1;
+%         else
+%             coupling_wake(p) = 0;
+%         end
+%     end
+% 
+%     % ---- NREM ----
+%     if firingRate_nrem(i) >= minFiringRate && firingRate_nrem(j) >= minFiringRate
+%         ccg_pair = squeeze(ccg_nrem(:,i,j));
+%         baseline = median(ccg_pair(baselineMask));
+%         if baseline > 0
+%             centerVal = mean(ccg_pair(centerWin));
+%             coupling_nrem(p) = centerVal / baseline - 1;
+%         else
+%             coupling_nrem(p) = 0;
+%         end
+%     end
+% 
+%     % ---- REM ----
+%     if firingRate_rem(i) >= minFiringRate && firingRate_rem(j) >= minFiringRate
+%         ccg_pair = squeeze(ccg_rem(:,i,j));
+%         baseline = median(ccg_pair(baselineMask));
+%         if baseline > 0
+%             centerVal = mean(ccg_pair(centerWin));
+%             coupling_rem(p) = centerVal / baseline - 1;
+%         else
+%             coupling_rem(p) = 0;
+%         end
+%     end
+% end
+% 
+% fprintf('Baseline-median normalized coupling complete.\n');
 
 %% ---------------- Comparision of whether units coupled in wake are coupled in nrem or rem
 %% wake and nrem
@@ -259,26 +435,73 @@ legend(sprintf('r = %.3f, p = %.3e', r, p), 'Unity Line', 'Location', 'northwest
 
 %% ----------- Rank pairs (most to least coupled based on wake)
 
-% Only keep non-NaN pairs
-validIdx = ~isnan(coupling_wake);
-validPairs = pairs(validIdx, :);
-validCoupling = coupling_wake(validIdx);
+nPairs = size(pairs,1);
 
-% Sort descending
-[sortedCoupling, sortIdx] = sort(validCoupling, 'descend');
-rankedPairs = validPairs(sortIdx, :);
+% Extract coupling values corresponding to each pair
+couplingWakeVec = nan(nPairs,1);
+couplingNremVec = nan(nPairs,1);
+couplingRemVec  = nan(nPairs,1);
 
-% Display top 30
-topN = min(30, length(sortedCoupling));
-fprintf('Top %d most coupled pairs (unit i, unit j) with coupling value:\n', topN);
-for k = 1:topN
-    fprintf('Pair %d: (%d, %d) -> %.2f\n', k, rankedPairs(k,1), rankedPairs(k,2), sortedCoupling(k));
+for k = 1:nPairs
+    a = pairs(k,1);
+    b = pairs(k,2);
+
+    couplingWakeVec(k) = coupling_wake(a,b);
+    couplingNremVec(k) = coupling_nrem(a,b);
+    couplingRemVec(k)  = coupling_rem(a,b);
 end
+
+% Only keep valid pairs
+validIdx = ~isnan(couplingWakeVec);
+
+validPairs       = pairs(validIdx,:);
+validWake        = couplingWakeVec(validIdx);
+validNrem        = couplingNremVec(validIdx);
+validRem         = couplingRemVec(validIdx);
+
+% Sort descending by wake coupling
+[sortedWake, sortIdx] = sort(validWake, 'descend');
+
+rankedPairs = validPairs(sortIdx,:);
+
+coupling_wake_sorted = sortedWake;
+coupling_nrem_sorted = validNrem(sortIdx);
+coupling_rem_sorted  = validRem(sortIdx);
+
+% Display top pairs
+topN = min(30, length(sortedWake));
+
+fprintf('Top %d most coupled pairs:\n', topN);
+
+for k = 1:topN
+    fprintf('Pair %d: (%d, %d) -> Wake=%.3f, NREM=%.3f, REM=%.3f\n', ...
+        k, ...
+        rankedPairs(k,1), ...
+        rankedPairs(k,2), ...
+        coupling_wake_sorted(k), ...
+        coupling_nrem_sorted(k), ...
+        coupling_rem_sorted(k));
+end
+% % Only keep non-NaN pairs
+% validIdx = ~isnan(coupling_wake);
+% validPairs = pairs(validIdx, :);
+% validCoupling = coupling_wake(validIdx);
+% 
+% % Sort descending
+% [sortedCoupling, sortIdx] = sort(validCoupling, 'descend');
+% rankedPairs = validPairs(sortIdx, :);
+% 
+% % Display top 30
+% topN = min(30, length(sortedCoupling));
+% fprintf('Top %d most coupled pairs (unit i, unit j) with coupling value:\n', topN);
+% for k = 1:topN
+%     fprintf('Pair %d: (%d, %d) -> %.2f\n', k, rankedPairs(k,1), rankedPairs(k,2), sortedCoupling(k));
+% end
 
 %% ------- Make summary plots for the 30 highest coupled pairs)
 
 % load needed files (meanWav and cell id type)
-pngOutputDir = '\\fsmresfiles.fsm.northwestern.edu\fsmresfiles\Basic_Sciences\Phys\SenzaiLab\Aparna\Mouse08\SUM-NEW_PAIR_SUMMARIES_COUPLED_UNITS_WITH_RF';
+pngOutputDir = '\\fsmresfiles.fsm.northwestern.edu\fsmresfiles\Basic_Sciences\Phys\SenzaiLab\Aparna\Mouse08\TEST2_with_norm';
 if ~exist(pngOutputDir,'dir'), mkdir(pngOutputDir); end
 
 % Load additional data needed for the function
@@ -299,25 +522,52 @@ cluster_id = cluster_id';
 % all_ccgs = {ccg_wake, ccg_nrem, ccg_rem};   % your already normalized CCGs
 
 % Reorder coupling vectors to match rankedPairs
-coupling_wake_sorted = sortedCoupling;
+% coupling_wake_sorted = sortedCoupling;
+% 
+% coupling_nrem_sorted = coupling_nrem(validIdx);
+% coupling_nrem_sorted = coupling_nrem_sorted(sortIdx);
+% 
+% coupling_rem_sorted  = coupling_rem(validIdx);
+% coupling_rem_sorted  = coupling_rem_sorted(sortIdx);
 
-coupling_nrem_sorted = coupling_nrem(validIdx);
-coupling_nrem_sorted = coupling_nrem_sorted(sortIdx);
-
-coupling_rem_sorted  = coupling_rem(validIdx);
-coupling_rem_sorted  = coupling_rem_sorted(sortIdx);
-
-all_ccgs = {ccg_wake, ccg_nrem, ccg_rem};
+% norm_all_ccgs = {coupling_wake, coupling_nrem, coupling_rem};
 
 sortBy = 'wake';
-topN   = 60;
+topN   = 10;
 
 %% Load RF map data for this mouse
 load("\\fsmresfiles.fsm.northwestern.edu\fsmresfiles\Basic_Sciences\Phys\SenzaiLab\Aparna\Mouse08_RFMapping\RF_maps\Spike_Data\Mouse08_20251007_810to2250_RFmap_SpikeRate.mat")
 
+% sanity check
+topCheck = 5;
+
+figure('Color','w');
+for k = 1:topCheck
+    
+    a = rankedPairs(k,1);
+    b = rankedPairs(k,2);
+    
+    subplot(topCheck,1,k)
+    
+    ccgWake = squeeze(all_ccgs_normalized{1}(:,a,b)); % 1 = wake
+    
+    plot(t, ccgWake, 'k','LineWidth',1.5); hold on
+    xline(0,'r--')
+    
+    title(sprintf('Rank %d | Units (%d,%d) | Wake coupling = %.3f', ...
+        k, a, b, coupling_wake_sorted(k)))
+    
+    ylabel('Norm CCG')
+    
+    if k==topCheck
+        xlabel('Time (ms)')
+    end
+    
+end
+
 
 %% Make summary figures for first 30 highest coupled pairs
-makePairSummaryPNGsWORKS(all_ccgs, t, rankedPairs, good_clusters, ...
+makePairSummaryPNGsWORKS(all_ccgs_normalized, t, rankedPairs, good_clusters, ...
                          coupling_wake_sorted, coupling_nrem_sorted, coupling_rem_sorted, ...
                          unitDepth, meanWav, cell_type, ...
                          xpos, ypos, sr, ...
@@ -328,36 +578,36 @@ makePairSummaryPNGsWORKS(all_ccgs, t, rankedPairs, good_clusters, ...
 
 %% 1. Compare full receptive field matrix, pearson correlation -- results in a lot of zeros
 
-topPairs = rankedPairs(1:topN,:);
-
-rf_similarity_on  = zeros(topN,1);
-rf_similarity_off = zeros(topN,1);
-
-for k = 1:topN
-    
-    uA = topPairs(k,1);
-    uB = topPairs(k,2);
-    
-    rfA_on  = mean(RFmap{uA}.ON.OnSet,3)  - RFmap{uA}.baseline;
-    rfB_on  = mean(RFmap{uB}.ON.OnSet,3)  - RFmap{uB}.baseline;
-
-    rfA_off = mean(RFmap{uA}.OFF.OnSet,3) - RFmap{uA}.baseline;
-    rfB_off = mean(RFmap{uB}.OFF.OnSet,3) - RFmap{uB}.baseline;
-    
-    rf_similarity_on(k)  = corr(rfA_on(:),  rfB_on(:));
-    rf_similarity_off(k) = corr(rfA_off(:), rfB_off(:));
-    
-end
-
-figure;
-scatter(rf_similarity_on, coupling_wake_sorted(1:topN))
-xlabel('RF similarity (ON)')
-ylabel('Coupling (wake)')
-
-figure;
-scatter(rf_similarity_off, coupling_wake_sorted(1:topN))
-xlabel('RF similarity (OFF)')
-ylabel('Coupling (wake)')
+% topPairs = rankedPairs(1:topN,:);
+% 
+% rf_similarity_on  = zeros(topN,1);
+% rf_similarity_off = zeros(topN,1);
+% 
+% for k = 1:topN
+% 
+%     uA = topPairs(k,1);
+%     uB = topPairs(k,2);
+% 
+%     rfA_on  = mean(RFmap{uA}.ON.OnSet,3)  - RFmap{uA}.baseline;
+%     rfB_on  = mean(RFmap{uB}.ON.OnSet,3)  - RFmap{uB}.baseline;
+% 
+%     rfA_off = mean(RFmap{uA}.OFF.OnSet,3) - RFmap{uA}.baseline;
+%     rfB_off = mean(RFmap{uB}.OFF.OnSet,3) - RFmap{uB}.baseline;
+% 
+%     rf_similarity_on(k)  = corr(rfA_on(:),  rfB_on(:));
+%     rf_similarity_off(k) = corr(rfA_off(:), rfB_off(:));
+% 
+% end
+% 
+% figure;
+% scatter(rf_similarity_on, coupling_wake_sorted(1:topN))
+% xlabel('RF similarity (ON)')
+% ylabel('Coupling (wake)')
+% 
+% figure;
+% scatter(rf_similarity_off, coupling_wake_sorted(1:topN))
+% xlabel('RF similarity (OFF)')
+% ylabel('Coupling (wake)')
 
 %% 2. Compare only distance between RF centers (peak positons)
 % % use abs to make it polarity independent
@@ -383,7 +633,7 @@ ylabel('Coupling (wake)')
 % Parameters
 nPairsToRun = size(rankedPairs, 1);
 topPairs = rankedPairs(1:topN,:);
-sigma = 1.2; % Smoothing factor for RF maps
+sigma = 1; % Smoothing factor for RF maps
 
 % Preallocate
 rf_overlap_on   = zeros(nPairsToRun,1);
@@ -460,14 +710,37 @@ end
 
 %% make scatter for all units (rf overlap vs coupling strength)
 
+% remove NaNs first
 validIdx = ~isnan(rf_overlap_on) & ~isnan(coupling_wake_sorted);
 
-num_to_plot = min(500, sum(validIdx));
+rf_valid  = rf_overlap_on(validIdx);
+rf_valid_off = rf_overlap_off(validIdx);
+coupling_valid = coupling_wake_sorted(validIdx);
 
-x_data = rf_overlap_on(1:num_to_plot);
-x_data_off = rf_overlap_off(1:num_to_plot);
-y_data = coupling_wake_sorted(1:num_to_plot);
-y_data_off = coupling_wake_sorted(1:num_to_plot);
+% sort by coupling strength (descending)
+[sortedCoupling, sortIdx] = sort(coupling_valid, 'descend');
+
+rf_sorted = rf_valid(sortIdx);
+rf_sorted_off = rf_valid_off(sortIdx);
+
+% % select top 50 coupled pairs
+% num_to_plot = min(50, length(sortedCoupling));
+
+% if want to plot all
+num_to_plot = size(sortedCoupling, 1);
+
+x_data     = rf_sorted(1:num_to_plot);
+x_data_off = rf_sorted_off(1:num_to_plot);
+y_data     = sortedCoupling(1:num_to_plot);
+
+% validIdx = ~isnan(rf_overlap_on) & ~isnan(coupling_nrem_sorted);
+
+% num_to_plot = min(5000, sum(validIdx));
+
+% x_data = rf_overlap_on(1:num_to_plot);
+% x_data_off = rf_overlap_off(1:num_to_plot);
+% y_data = coupling_nrem_sorted(1:num_to_plot);
+% y_data_off = coupling_nrem_sorted(1:num_to_plot);
 
 %% FOR ON
 % Calculate Correlation
@@ -491,15 +764,15 @@ grid on;
 
 %% FOR OFF
 % Calculate Correlation
-[r, p] = corr(x_data_off, y_data_off);
+[r, p] = corr(x_data_off, y_data);
 
 figure('Color', 'w', 'Position', [100, 100, 800, 800]);
 % Use 'binscatter' if you have many points, or 'scatter' with transparency
-scatter(x_data_off, y_data_off, 20, 'filled', 'MarkerFaceAlpha', 0.3, 'MarkerFaceColor', [0.85 0.33 0.1]);
+scatter(x_data_off, y_data, 20, 'filled', 'MarkerFaceAlpha', 0.3, 'MarkerFaceColor', [0.85 0.33 0.1]);
 hold on;
 
 % Add a trend line (Linear Regression)
-coeffs = polyfit(x_data_off, y_data_off, 1);
+coeffs = polyfit(x_data_off, y_data, 1);
 fitX = linspace(min(x_data_off), max(x_data_off), 100);
 fitY = polyval(coeffs, fitX);
 plot(fitX, fitY, 'k', 'LineWidth', 1);
@@ -509,31 +782,48 @@ ylabel('Wake Coupling Strength');
 title(sprintf('Functional Coupling vs. Spatial Overlap\nr = %.3f (p = %.2e)', r, p));
 grid on;
 
+%% Test plot ON RF overlap vs OFF RF overlap
+[r, p] = corr(x_data, x_data_off);
+figure;
+scatter(x_data, x_data_off, 20, 'filled', 'MarkerFaceAlpha', 0.3, 'MarkerFaceColor', [1.0, 0.4, 0.6]);
+hold on;
+% Add a trend line (Linear Regression)
+coeffs = polyfit(x_data, x_data_off, 1);
+fitX = linspace(min(x_data), max(x_data), 100);
+fitY = polyval(coeffs, fitX);
+plot(fitX, fitY, 'k', 'LineWidth', 1);
+
+xlabel('ON RF Overlap (Jaccard Index)');
+ylabel('OFF RF Overlap (Jaccard Index)');
+grid on;
+
+title(sprintf('ON rf vs OFF rf\nr = %.3f (p = %.2e)', r, p));
+
 
 %% Correct way to plot the Top 1 Pair
-k = 1; 
-uA = topPairs(k,1); 
-uB = topPairs(k,2);
-
-% 1. Re-generate the smoothed maps for these specific units
-rfA_top = imgaussfilt(mean(RFmap{uA}.ON.OnSet,3) - RFmap{uA}.baseline, sigma);
-rfB_top = imgaussfilt(mean(RFmap{uB}.ON.OnSet,3) - RFmap{uB}.baseline, sigma);
-
-% 2. Re-generate the masks
-m1 = rfA_top >= prctile(rfA_top(:), 80);
-m2 = rfB_top >= prctile(rfB_top(:), 80);
-
-% 3. Create RGB image
-overlayImg = zeros(size(m1,1), size(m1,2), 3);
-overlayImg(:,:,1) = m1; % Red
-overlayImg(:,:,2) = m2; % Green
-
-figure('Color', 'w');
-imshow(overlayImg); 
-title(sprintf('TOP RANKED PAIR (#%d)\nCluster %d & %d', k, good_clusters(uA), good_clusters(uB)));
+% k = 1; 
+% uA = topPairs(k,1); 
+% uB = topPairs(k,2);
+% 
+% % 1. Re-generate the smoothed maps for these specific units
+% rfA_top = imgaussfilt(mean(RFmap{uA}.ON.OnSet,3) - RFmap{uA}.baseline, sigma);
+% rfB_top = imgaussfilt(mean(RFmap{uB}.ON.OnSet,3) - RFmap{uB}.baseline, sigma);
+% 
+% % 2. Re-generate the masks
+% m1 = rfA_top >= prctile(rfA_top(:), 80);
+% m2 = rfB_top >= prctile(rfB_top(:), 80);
+% 
+% % 3. Create RGB image
+% overlayImg = zeros(size(m1,1), size(m1,2), 3);
+% overlayImg(:,:,1) = m1; % Red
+% overlayImg(:,:,2) = m2; % Green
+% 
+% figure('Color', 'w');
+% imshow(overlayImg); 
+% title(sprintf('TOP RANKED PAIR (#%d)\nCluster %d & %d', k, good_clusters(uA), good_clusters(uB)));
 
 %% New function call include overlap RFs in the summary pdf
-pngOutputDir = '\\fsmresfiles.fsm.northwestern.edu\fsmresfiles\Basic_Sciences\Phys\SenzaiLab\Aparna\Mouse08\MEAN-WITH-OVERLAP-NEW_PAIR_SUMMARIES_COUPLED_UNITS_WITH_RF';
+pngOutputDir = '\\fsmresfiles.fsm.northwestern.edu\fsmresfiles\Basic_Sciences\Phys\SenzaiLab\Aparna\Mouse08\00MEAN-WITH-OVERLAP-NEW_PAIR_SUMMARIES_COUPLED_UNITS_WITH_RF';
 if ~exist(pngOutputDir,'dir'), mkdir(pngOutputDir); end
 
 makePairSummaryPNGsPlusCorrRFs(all_ccgs, t, rankedPairs, good_clusters, ...

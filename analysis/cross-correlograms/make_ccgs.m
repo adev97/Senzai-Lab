@@ -13,6 +13,7 @@
 
 addpath(genpath("R:\Basic_Sciences\Phys\SenzaiLab\Yuta_Senzai\MatlabCodes\MATLAB\MyCodes"))
 addpath(genpath("C:\Users\urs2027\Documents\GitHub\Senzai-Lab\buzcode-master")) 
+addpath(genpath("C:\Users\urs2027\Documents\GitHub\Senzai-Lab\analysis"))
 
 % example function usage from yuta
 % [ccg,t_ccg] = CCG(ts_res,gs_res,'binSize',0.02,'duration',8);
@@ -25,7 +26,8 @@ dtype = 'int16';
 
 % kilosort directory
 % ksDir = 'D:\Kilosort\Mouse08_SC_20251007_810to2250\kilosort4';
-ksDir = '\\fsmresfiles.fsm.northwestern.edu\fsmresfiles\Basic_Sciences\Phys\SenzaiLab\Elissa_Belluccini\Kilosort\Mouse08_SC_20251007_810to2250\kilosort4';
+% ksDir = '\\fsmresfiles.fsm.northwestern.edu\fsmresfiles\Basic_Sciences\Phys\SenzaiLab\Elissa_Belluccini\Kilosort\Mouse08_SC_20251007_810to2250\kilosort4';
+ksDir = 'D:\Kilosort\Mouse08_SC_20251007_810to2250\kilosort4';
 
 spikeTimes    = readNPY(fullfile(ksDir,'spike_times.npy'));
 spikeTimes    = spikeTimes + 1;
@@ -115,8 +117,8 @@ s_nrem = Restrict(s, nremInts);
 s_rem  = Restrict(s, remInts);
 
 % variables for ccg computation
-binSize = 0.020; % s (1ms bin for fine detail ccg indv plots) -- FOR HEATMAP - use 0.02s
-duration = 4; % s (40ms lag for fine detail ccg indv plots) -- FOR HEATMAP - use 8s
+binSize = 0.001; % s (1ms bin for fine detail ccg indv plots) -- FOR HEATMAP - use 0.02s
+duration = 0.040; % s (40ms lag for fine detail ccg indv plots) -- FOR HEATMAP - use 8s
 % NOTE: this heatmap script does not work for small bin size + duration,
 % does work for 4s instead of 8s though
 
@@ -186,7 +188,7 @@ gaussKernel = exp(-xGauss.^2/(2*sigma^2));
 gaussKernel = gaussKernel / sum(gaussKernel);
 
 % Baseline window for normalization (e.g., 0.2-0.5 s away from zero lag)
-baselineWindow = [0.2 0.5]; 
+baselineWindow = [0.010 0.020]; 
 
 %% Build normalized pairwise CCGs (lower triangle only)
 normCCG_states = cell(1, nStates);
@@ -201,14 +203,14 @@ for s = 1:nStates
         for j = 1:i-1  % lower triangle, each pair once
             pairCCG = squeeze(ccg(:,i,j))';
             
-            % Smooth CCG with Gaussian kernel
-            pairCCG_sm = conv(pairCCG, gaussKernel, 'same');
+            % % Smooth CCG with Gaussian kernel
+            % pairCCG = conv(pairCCG, gaussKernel, 'same');
             
             % Find baseline bins
             baselineBins = find(abs(t) >= baselineWindow(1) & abs(t) <= baselineWindow(2));
             
             % Normalize by median of baseline
-            pairCCGnorm = pairCCG_sm / median(pairCCG_sm(baselineBins));
+            pairCCGnorm = pairCCG / median(pairCCG(baselineBins));
             
             normCCG = [normCCG; pairCCGnorm];
         end
@@ -251,8 +253,8 @@ end
 %% Plot CCG for one pair across all states with baseline normalization
 
 % Specify the original cluster IDs you want to examine
-clusterA = 89;  % original Kilosort cluster ID
-clusterB = 267;  % original Kilosort cluster ID
+clusterA = 553;  % original Kilosort cluster ID
+clusterB = 574;  % original Kilosort cluster ID
 
 % Convert to unit IDs
 unitA = find(good_clusters == clusterA);
@@ -272,6 +274,51 @@ figure; hold on;
 colors = {'k','r','b'}; % color for each state
 nEdgeBins = nBins;         % number of bins at each end to compute baseline
 
+exclude_ms = 5;                     % skip ±5 ms
+excludeBins = round(exclude_ms / binSize); 
+
+% colors = {'k','r','b'}; % color for each state
+% exclude_ms = 5;         % skip ±5 ms around zero lag
+% excludeBins = round(exclude_ms / binSize); % number of bins to skip
+% nEdgeBins = nBins;      % number of bins at each side of zero to consider for baseline
+% 
+% for s = 1:length(states)
+%     ccgState = all_ccgs{s};
+% 
+%     % extract CCG for this pair (spikes of B relative to A)
+%     ccgPair = squeeze(ccgState(:,unitA,unitB));
+% 
+%     % --- baseline bins (edges), excluding ±5 ms around 0 lag ---
+%     % Negative lags: first nEdgeBins
+%     negBins = 1:nEdgeBins;
+%     negBins = negBins(1:end-excludeBins);  % remove bins close to 0 lag
+% 
+%     % Positive lags: last nEdgeBins
+%     posBins = (length(ccgPair)-nEdgeBins+1):length(ccgPair);
+%     posBins = posBins((excludeBins+1):end); % remove bins close to 0 lag
+% 
+%     % Combine edge bins
+%     baselineBins = [negBins, posBins];
+% 
+%     % Safety check: ensure we have bins
+%     if isempty(baselineBins)
+%         error('No bins left for baseline! Increase nEdgeBins or decrease exclude_ms.');
+%     end
+% 
+%     % Compute median baseline
+%     baseline = median(ccgPair(baselineBins));
+% 
+%     % Normalize CCG
+%     ccgNorm = ccgPair / baseline;
+% 
+%     % Plot
+%     plot(t, ccgNorm, 'Color', colors{s}, 'LineWidth', 2);
+% end
+
+
+
+
+%% WORKS
 for s = 1:length(states)
     ccgState = all_ccgs{s};
 
@@ -279,12 +326,17 @@ for s = 1:length(states)
     ccgPair = squeeze(ccgState(:,unitA,unitB));
 
     % baseline normalization using edge bins
+    % baselineBins = [1:(nEdgeBins-excludeBins), (length(ccgPair)-nEdgeBins+1+excludeBins):length(ccgPair)];
+    % baseline = median(ccgPair(baselineBins));
+    % 
+    % ccgNorm = ccgPair / baseline;
     baseline = median([ccgPair(1:nEdgeBins); ccgPair(end-nEdgeBins+1:end)]);
     ccgNorm = ccgPair / baseline;
 
     % plot
     plot(t, ccgNorm, 'Color', colors{s}, 'LineWidth', 2);
 end
+%% ----
 
 xlabel('Time lag (s)');
 ylabel('Normalized CCG');

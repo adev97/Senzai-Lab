@@ -117,7 +117,7 @@ if ~exist(outWaveDir, 'dir'); mkdir(outWaveDir); end
 if ~exist(outDepthDir, 'dir'); mkdir(outDepthDir); end
 
 
-for clusterID_index = 55:nClusters
+for clusterID_index = 52:nClusters
 
     mean_wave_this_cluster = meanWav(:,:,clusterID_index);
     num_channels_to_plot = 21; %% change this based on how many channels you want to visualize above/below the peak channel
@@ -200,36 +200,54 @@ for clusterID_index = 55:nClusters
 
     
     %% Heatmap spike propogation
-    
+
     fig2 = figure('Visible','off');
-    % subplot(1,2,1);
+
     imagesc(t, 1:length(channelsToPlot), mean_wave_this_cluster(channelsToPlot,:));
+    set(gca, 'YDir', 'normal');   % Fix flip so it matches waveform plot
+    
     colormap('jet');
     colorbar;
     xlabel('Time (ms)');
     ylabel('Channel (superficial → deep)');
     title('Waveform heatmap');
+    
     set(gca, 'YTick', 1:length(channelsToPlot));
     set(gca, 'YTickLabel', arrayfun(@(ch) sprintf('Ch%d', ch), channelsToPlot, 'UniformOutput', false));
-    
-    % Find peak time on each channel
-    % subplot(1,2,2);
-    % peak_times = zeros(length(channelsToPlot), 1);
-    % for i = 1:length(channelsToPlot)
-    %     ch = channelsToPlot(i);
-    %     [~, peak_idx] = min(mean_wave_this_cluster(ch,:)); % trough time
-    %     peak_times(i) = t(peak_idx);
-    % end
-    % 
-    % plot(peak_times, ypos(channelsToPlot), 'ko-', 'LineWidth', 2, 'MarkerFaceColor', 'k');
-    % xlabel('Trough time (ms)');
-    % ylabel('Depth (μm)');
-    % title('Spike propagation');
-    % grid on;
     
     saveas(fig2, fullfile(outDepthDir, ...
         sprintf('unit_%03d_heatmap_21chan.png', good_clusters(clusterID_index))));
     close(fig2);
+        
+    % fig2 = figure('Visible','off');
+    % % subplot(1,2,1);
+    % imagesc(t, 1:length(channelsToPlot), mean_wave_this_cluster(channelsToPlot,:));
+    % colormap('jet');
+    % colorbar;
+    % xlabel('Time (ms)');
+    % ylabel('Channel (superficial → deep)');
+    % title('Waveform heatmap');
+    % set(gca, 'YTick', 1:length(channelsToPlot));
+    % set(gca, 'YTickLabel', arrayfun(@(ch) sprintf('Ch%d', ch), channelsToPlot, 'UniformOutput', false));
+    
+    % % Find peak time on each channel
+    % % subplot(1,2,2);
+    % % peak_times = zeros(length(channelsToPlot), 1);
+    % % for i = 1:length(channelsToPlot)
+    % %     ch = channelsToPlot(i);
+    % %     [~, peak_idx] = min(mean_wave_this_cluster(ch,:)); % trough time
+    % %     peak_times(i) = t(peak_idx);
+    % % end
+    % % 
+    % % plot(peak_times, ypos(channelsToPlot), 'ko-', 'LineWidth', 2, 'MarkerFaceColor', 'k');
+    % % xlabel('Trough time (ms)');
+    % % ylabel('Depth (μm)');
+    % % title('Spike propagation');
+    % % grid on;
+    % 
+    % saveas(fig2, fullfile(outDepthDir, ...
+    %     sprintf('unit_%03d_heatmap_21chan.png', good_clusters(clusterID_index))));
+    % close(fig2);
     
 end
 
