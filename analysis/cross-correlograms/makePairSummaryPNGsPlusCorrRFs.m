@@ -71,16 +71,21 @@ for j = 1:topN
 
     % ===== CCGs for all states =====
     subplot(7,2,[1 2]); hold on;
+    
+    % Define plot mask for ±0.5 s
+    plotMask = abs(t) <= 0.5;   % crop to ±0.5 s
+    
     for s = 1:3
         ccgPair = squeeze(all_ccgs{s}(:, unitA, unitB));
-        plot(t, ccgPair, 'Color', colors{s}, 'LineWidth', 2);
+        plot(t(plotMask), ccgPair(plotMask), 'Color', colors{s}, 'LineWidth', 2);
     end
+    
     xlabel('Time lag (s)');
     ylabel('Normalized CCG');
     title(sprintf('Cluster %d → Cluster %d', clusterA, clusterB));
     legend(states,'Location','best');
     grid on;
-    xlim([t(1) t(end)]);
+    xlim([-0.5 0.5]);   % crop axes to ±0.5 s
 
     % ===== Unit A waveform =====
     subplot(7,2,[3 5]);
