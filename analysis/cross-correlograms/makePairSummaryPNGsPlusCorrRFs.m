@@ -1,7 +1,7 @@
 function makePairSummaryPNGsPlusCorrRFs(all_ccgs, t, pairs, good_clusters, ...
                                    coupling_wake, coupling_nrem, coupling_rem, ...
                                    unitDepth, meanWav, cell_type, ...
-                                   xpos, ypos, sr, sortBy, topN, pdfDir, RFmap)
+                                   xpos, ypos, sr, sortBy, topN, pdfDir, RFmap, maskVal, dispTime)
 
 % % Create summary PNGs for top N coupled pairs with RFs collapsed over time using mean
 % makePairSummaryPNGsWORKS(all_ccgs, t, pairs, good_clusters, ...
@@ -67,13 +67,13 @@ for j = 1:topN
             j, topN, clusterA, clusterB);
 
     % Figure
-    fig = figure('Position',[50,50,1200,1500]);
+    fig = figure('Position',[50,50,1200,1500], 'Visible','off');
 
     % ===== CCGs for all states =====
     subplot(7,2,[1 2]); hold on;
     
     % Define plot mask for ±0.5 s
-    plotMask = abs(t) <= 0.5;   % crop to ±0.5 s
+    plotMask = abs(t) <= dispTime;   % crop to ±0.5 s
     
     for s = 1:3
         ccgPair = squeeze(all_ccgs{s}(:, unitA, unitB));
@@ -85,7 +85,7 @@ for j = 1:topN
     title(sprintf('Cluster %d → Cluster %d', clusterA, clusterB));
     legend(states,'Location','best');
     grid on;
-    xlim([-0.5 0.5]);   % crop axes to ±0.5 s
+    xlim([-dispTime dispTime]);   % crop axes to ±0.5 s
 
     % ===== Unit A waveform =====
     subplot(7,2,[3 5]);
@@ -162,10 +162,19 @@ for j = 1:topN
     rfB_off  = imfilter(rawB_off, h, 'replicate');
     
     % 3. Generate Logical Masks (Top 20%)
-    mA_on = rfA_on >= prctile(rfA_on(:), 80);
-    mB_on = rfB_on >= prctile(rfB_on(:), 80);
-    mA_off = rfA_off >= prctile(rfA_off(:), 80);
-    mB_off = rfB_off >= prctile(rfB_off(:), 80);
+    % mA_on = rfA_on >= prctile(rfA_on(:), maskVal);
+    % mB_on = rfB_on >= prctile(rfB_on(:), maskVal);
+    % mA_off = rfA_off >= prctile(rfA_off(:), maskVal);
+    % mB_off = rfB_off >= prctile(rfB_off(:), maskVal);
+    noiseThresh_A_on  = 2 * std(rfA_on(:));
+    noiseThresh_B_on  = 2 * std(rfB_on(:));
+    noiseThresh_A_off = 2 * std(rfA_off(:));
+    noiseThresh_B_off = 2 * std(rfB_off(:));
+    
+    mA_on  = (rfA_on  >= prctile(rfA_on(:),  maskVal)) & (rfA_on  > noiseThresh_A_on);
+    mB_on  = (rfB_on  >= prctile(rfB_on(:),  maskVal)) & (rfB_on  > noiseThresh_B_on);
+    mA_off = (rfA_off >= prctile(rfA_off(:), maskVal)) & (rfA_off > noiseThresh_A_off);
+    mB_off = (rfB_off >= prctile(rfB_off(:), maskVal)) & (rfB_off > noiseThresh_B_off);
 
     % --- Row 7: The Overlap/Correlation Row ---
     % Subplot 13: ON Overlap (Red=A, Green=B, Yellow=Overlap)

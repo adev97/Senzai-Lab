@@ -51,7 +51,6 @@ nClusters = numel(good_clusters);
 
 rawFile = "D:\Kilosort\Mouse08_SC_20251007_810to2250\Merged.dat";
 
-
 % chunking it because Merged.dat is huge
 nCh = 385; % from Elissa
 bytesPerSample = 2;

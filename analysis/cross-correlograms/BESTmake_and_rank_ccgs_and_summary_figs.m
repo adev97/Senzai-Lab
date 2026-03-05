@@ -81,9 +81,6 @@ wakeDuration = sum(wakeInts(:,2) - wakeInts(:,1));
 nremDuration = sum(nremInts(:,2) - nremInts(:,1));
 remDuration  = sum(remInts(:,2)  - remInts(:,1));
 
-% fprintf('State durations (s) - WAKE: %.1f | NREM: %.1f | REM: %.1f\n', ...
-%     wakeDuration, nremDuration, remDuration);
-
 % Preallocate
 minFiringRate = 0.5; % Hz
 
@@ -112,12 +109,116 @@ fprintf('  WAKE: %d / %d\n', sum(firingRate_wake < minFiringRate), nClusters);
 fprintf('  NREM: %d / %d\n', sum(firingRate_nrem < minFiringRate), nClusters);
 fprintf('  REM : %d / %d\n', sum(firingRate_rem  < minFiringRate), nClusters);
 
+%% ------ filter low firing rate units out of subsequent calculations ---------
+% Filter low-firing units (< 0.5 Hz in ANY state)
+
+lowFiringUnits = (firingRate_wake < minFiringRate) | ...
+                 (firingRate_nrem < minFiringRate) | ...
+                 (firingRate_rem  < minFiringRate);
+
+keepUnits = find(~lowFiringUnits);  % indices of units to keep
+nClustersFiltered = length(keepUnits);
+
+fprintf('Removing %d / %d units with FR < %.2f Hz in any state\n', ...
+    sum(lowFiringUnits), nClusters, minFiringRate);
+
+% Remap: filter good_clusters and unitDepth
+% good_clusters = good_clusters(keepUnits);
+% unitDepth     = unitDepth(keepUnits);
+
+% Filter spike trains — remap unit IDs to new indices
+keepMask = ismember(unitIDs, keepUnits);
+ts = ts(keepMask);
+oldIDs = unitIDs(keepMask);
+
+% Remap old unit indices to new 1:nClustersFiltered indices
+newIDs = zeros(size(oldIDs));
+for i = 1:nClustersFiltered
+    newIDs(oldIDs == keepUnits(i)) = i;
+end
+
+s = [ts newIDs];
+nClusters = nClustersFiltered;
+
+%% -------------------------------------------------------------------------- new
+
+%% Load and verify external data alignment (before applying keepUnits filter)
+
+% 1. Load and check meanWav
+meanWaveformDir = '\\fsmresfiles.fsm.northwestern.edu\fsmresfiles\Basic_Sciences\Phys\SenzaiLab\Aparna\Mouse08\mean-waveforms-good-clusters';
+good_clusters_main = good_clusters;          % save FIRST
+load(fullfile(meanWaveformDir, 'meanWav_units.mat'));  % now load
+good_clusters_wav  = good_clusters;          % rename loaded version
+good_clusters      = good_clusters_main;     % restore original
+% load(fullfile(meanWaveformDir, 'meanWav_units.mat'));
+% good_clusters_main = good_clusters;          % save your main one before load overwrites it
+% good_clusters_wav = good_clusters; % meanWav_units.mat saves good_clusters
+% good_clusters      = good_clusters_main;     % restore your main one
+
+% rename to avoid overwriting your main good_clusters
+% check what variable name is saved in that mat file first
+
+if ~isequal(good_clusters_wav, good_clusters)
+    fprintf('WARNING: meanWav mismatch - reordering\n');
+    % [~, reorderIdx] = ismember(good_clusters, good_clusters_wav);
+    % if any(reorderIdx == 0); error('Units missing from meanWav'); end
+    % meanWav = meanWav(:,:,reorderIdx);
+else
+    fprintf('meanWav OK\n');
+end
+
+% 2. Load and check cell_type
+classificationDir = '\\fsmresfiles.fsm.northwestern.edu\fsmresfiles\Basic_Sciences\Phys\SenzaiLab\Aparna\Mouse08\SC-RGC-classification-with-kmeans-all-channels-BEST';
+load(fullfile(classificationDir, 'RGC-SC-classification.mat'));
+cell_type  = cell_type';
+cluster_id = cluster_id';
+
+if ~isequal(cluster_id, good_clusters)
+    fprintf('WARNING: cell_type mismatch - reordering\n');
+    % [~, reorderIdx] = ismember(good_clusters, cluster_id);
+    % if any(reorderIdx == 0); error('Units missing from cell_type'); end
+    % cell_type = cell_type(reorderIdx);
+else
+    fprintf('cell_type OK\n');
+end
+
+% 3. Load and check RFmap
+load("\\fsmresfiles.fsm.northwestern.edu\fsmresfiles\Basic_Sciences\Phys\SenzaiLab\Aparna\Mouse08_RFMapping\RF_maps\Spike_Data\Mouse08_20251007_810to2250_RFmap_SpikeRate.mat")
+labels_file   = fullfile(ksDir, 'cluster_KSLabel.tsv');
+unit_labels   = readtable(labels_file, 'FileType', 'text', 'Delimiter', '\t');
+good_idx_rf   = strcmp(unit_labels.KSLabel, 'good');
+good_units_rf = unit_labels.cluster_id(good_idx_rf);
+
+if ~isequal(good_units_rf, good_clusters)
+    fprintf('WARNING: RFmap mismatch - reordering\n');
+    % [~, reorderIdx] = ismember(good_clusters, good_units_rf);
+    % if any(reorderIdx == 0); error('Units missing from RFmap'); end
+    % RFmap = RFmap(reorderIdx);
+else
+    fprintf('RFmap OK\n');
+end
+
+% 4. Now apply firing rate filter to all together
+good_clusters = good_clusters(keepUnits);
+unitDepth     = unitDepth(keepUnits);
+meanWav       = meanWav(:,:,keepUnits);
+cell_type     = cell_type(keepUnits);
+RFmap         = RFmap(keepUnits);
+
+%% --------------------------------------------------------------------------------------- new
+
+% re-restrict the sleep states for the units used
+% NOW re-restrict with the filtered spike train
+s_wake = Restrict(s, wakeInts);
+s_nrem = Restrict(s, nremInts);
+s_rem  = Restrict(s, remInts);
+
 %% making CCGs for +- 1s
-% use simply median normalization, still remove the below 0.5hz units and
+% use simple median normalization, still remove the below 0.5hz units and
 % fill those pairs them with NaNs
 
 binSize  = 0.001; % 1ms bins
-duration = 8; % 8s total window
+duration = 4; % 8s total window
 
 tic
 
@@ -137,7 +238,7 @@ nBins = size(ccg_wake, 1);
 [nTimeBins, nUnits, ~] = size(ccg_wake);
 
 %% Save CCGs and t
-ccgSavePath = "\\fsmresfiles.fsm.northwestern.edu\fsmresfiles\Basic_Sciences\Phys\SenzaiLab\Aparna\Mouse08\ccgs-1ms-8s";
+ccgSavePath = "\\fsmresfiles.fsm.northwestern.edu\fsmresfiles\Basic_Sciences\Phys\SenzaiLab\Aparna\Mouse08\passed-ccgs-1ms-8s";
 if ~exist(ccgSavePath,'dir'), mkdir(ccgSavePath); end
 
 save(fullfile(ccgSavePath, 'ccgs.mat'), "ccg_wake", "ccg_nrem", "ccg_rem", "t");
@@ -360,41 +461,23 @@ for k = 1:topN
         coupling_nrem_sorted(k), ...
         coupling_rem_sorted(k));
 end
-% % Only keep non-NaN pairs
-% validIdx = ~isnan(coupling_wake);
-% validPairs = pairs(validIdx, :);
-% validCoupling = coupling_wake(validIdx);
-% 
-% % Sort descending
-% [sortedCoupling, sortIdx] = sort(validCoupling, 'descend');
-% rankedPairs = validPairs(sortIdx, :);
-% 
-% % Display top 30
-% topN = min(30, length(sortedCoupling));
-% fprintf('Top %d most coupled pairs (unit i, unit j) with coupling value:\n', topN);
-% for k = 1:topN
-%     fprintf('Pair %d: (%d, %d) -> %.2f\n', k, rankedPairs(k,1), rankedPairs(k,2), sortedCoupling(k));
-% end
 
 %% ------- Make summary plots for the 30 highest coupled pairs)
 
 % load needed files (meanWav and cell id type)
-pngOutputDir = '\\fsmresfiles.fsm.northwestern.edu\fsmresfiles\Basic_Sciences\Phys\SenzaiLab\Aparna\Mouse08\TEST3-8s-plot-1s_with_norm';
+pngOutputDir = '\\fsmresfiles.fsm.northwestern.edu\fsmresfiles\Basic_Sciences\Phys\SenzaiLab\Aparna\Mouse08\hmm-TEST3-8s-plot-1s_with_norm';
 if ~exist(pngOutputDir,'dir'), mkdir(pngOutputDir); end
 
 % Load additional data needed for the function
-meanWaveformDir   = '\\fsmresfiles.fsm.northwestern.edu\fsmresfiles\Basic_Sciences\Phys\SenzaiLab\Aparna\Mouse08\mean-waveforms-good-clusters';
-classificationDir = '\\fsmresfiles.fsm.northwestern.edu\fsmresfiles\Basic_Sciences\Phys\SenzaiLab\Aparna\Mouse08\SC-RGC-classification-with-kmeans-all-channels-BEST';
-
-load(fullfile(meanWaveformDir,   'meanWav_units.mat'));
-load(fullfile(classificationDir, 'RGC-SC-classification.mat'));
-
-xpos = chanPos(:,1);
-ypos = chanPos(:,2);
+% meanWaveformDir   = '\\fsmresfiles.fsm.northwestern.edu\fsmresfiles\Basic_Sciences\Phys\SenzaiLab\Aparna\Mouse08\mean-waveforms-good-clusters';
+% classificationDir = '\\fsmresfiles.fsm.northwestern.edu\fsmresfiles\Basic_Sciences\Phys\SenzaiLab\Aparna\Mouse08\SC-RGC-classification-with-kmeans-all-channels-BEST';
+% 
+% load(fullfile(meanWaveformDir,   'meanWav_units.mat'));
+% load(fullfile(classificationDir, 'RGC-SC-classification.mat'));
 
 % Flip cell_type orientation if needed
-cell_type  = cell_type';
-cluster_id = cluster_id';
+% cell_type  = cell_type';
+% cluster_id = cluster_id';
 
 % Make summary plots for top 30 pairs during wake
 % all_ccgs = {ccg_wake, ccg_nrem, ccg_rem};   % your already normalized CCGs
@@ -411,10 +494,32 @@ cluster_id = cluster_id';
 % norm_all_ccgs = {coupling_wake, coupling_nrem, coupling_rem};
 
 sortBy = 'wake';
-topN   = 50;
+topN   = 200;
 
 %% Load RF map data for this mouse
-load("\\fsmresfiles.fsm.northwestern.edu\fsmresfiles\Basic_Sciences\Phys\SenzaiLab\Aparna\Mouse08_RFMapping\RF_maps\Spike_Data\Mouse08_20251007_810to2250_RFmap_SpikeRate.mat")
+% load("\\fsmresfiles.fsm.northwestern.edu\fsmresfiles\Basic_Sciences\Phys\SenzaiLab\Aparna\Mouse08_RFMapping\RF_maps\Spike_Data\Mouse08_20251007_810to2250_RFmap_SpikeRate.mat")
+% 
+% if ~isequal(good_units, good_clusters)
+%     fprintf('WARNING: good_units and good_clusters do not match - reordering RFmap\n');
+% 
+%     % Reorder RFmap to match good_clusters ordering
+%     [~, reorderIdx] = ismember(good_clusters, good_units);
+% 
+%     if any(reorderIdx == 0)
+%         error('Some units in good_clusters not found in good_units - RF mapping may be incomplete');
+%     end
+% 
+%     RFmap = RFmap(reorderIdx);
+% else
+%     fprintf('good_units and good_clusters match - RFmap ordering is correct\n');
+% end
+
+
+
+
+% meanWav       = meanWav(:,:,keepUnits);
+% cell_type     = cell_type(keepUnits);
+% RFmap         = RFmap(keepUnits);
 
 % sanity check
 topCheck = 5;
@@ -519,6 +624,8 @@ rf_overlap_off  = zeros(nPairsToRun,1);
 centroid_dist_on   = zeros(nPairsToRun,1); 
 centroid_dist_off   = zeros(nPairsToRun,1);
 
+maskVal = 90;
+
 for k = 1:nPairsToRun
     uA = rankedPairs(k,1);
     uB = rankedPairs(k,2);
@@ -530,16 +637,26 @@ for k = 1:nPairsToRun
     rfA_off = imgaussfilt(mean(RFmap{uA}.OFF.OnSet,3) - RFmap{uA}.baseline, sigma);
     rfB_off = imgaussfilt(mean(RFmap{uB}.OFF.OnSet,3) - RFmap{uB}.baseline, sigma);
     
-    % 2. Thresholding (Top 20% of signal)
-    threshA_on = prctile(rfA_on(:), 85);
-    threshB_on = prctile(rfB_on(:), 85);
-    threshA_off = prctile(rfA_off(:), 85);
-    threshB_off = prctile(rfB_off(:), 85);
+    % 2. Thresholding (Top 10% of signal)
+    threshA_on = prctile(rfA_on(:), maskVal);
+    threshB_on = prctile(rfB_on(:), maskVal);
+    threshA_off = prctile(rfA_off(:), maskVal);
+    threshB_off = prctile(rfB_off(:), maskVal);
+
+    noiseThresh_A_on  = 2 * std(rfA_on(:)); % kep pixels that are two std from baseline firing
+    noiseThresh_B_on  = 2 * std(rfB_on(:));
+    noiseThresh_A_off = 2 * std(rfA_off(:));
+    noiseThresh_B_off = 2 * std(rfB_off(:));
+
+    maskA_on  = (rfA_on  >= threshA_on)  & (rfA_on  > noiseThresh_A_on);
+    maskB_on  = (rfB_on  >= threshB_on)  & (rfB_on  > noiseThresh_B_on);
+    maskA_off = (rfA_off >= threshA_off) & (rfA_off > noiseThresh_A_off);
+    maskB_off = (rfB_off >= threshB_off) & (rfB_off > noiseThresh_B_off);
     
-    maskA_on = rfA_on >= threshA_on;
-    maskB_on = rfB_on >= threshB_on;
-    maskA_off = rfA_off >= threshA_off;
-    maskB_off = rfB_off >= threshB_off;
+    % maskA_on = rfA_on >= threshA_on;
+    % maskB_on = rfB_on >= threshB_on;
+    % maskA_off = rfA_off >= threshA_off;
+    % maskB_off = rfB_off >= threshB_off;
 
     % 3. Calculate Jaccard Overlap (Intersection over Union)
     intersection = sum(maskA_on(:) & maskB_on(:));
@@ -553,7 +670,7 @@ for k = 1:nPairsToRun
     intersection_off = sum(maskA_off(:) & maskB_off(:));
     union_area_off   = sum(maskA_off(:) | maskB_off(:));
     if union_area_off > 0
-        rf_overlap_off(k) = intersection / union_area_off;
+        rf_overlap_off(k) = intersection_off / union_area_off;
     else
         rf_overlap_off(k) = 0;
     end
@@ -707,10 +824,10 @@ rf_sorted = rf_valid(sortIdx);
 rf_sorted_off = rf_valid_off(sortIdx);
 
 % % select top 50 coupled pairs
-% num_to_plot = min(50, length(sortedCoupling));
+num_to_plot = min(500, length(sortedCoupling));
 
 % if want to plot all
-num_to_plot = size(sortedCoupling, 1);
+% num_to_plot = size(sortedCoupling, 1);
 
 x_data     = rf_sorted(1:num_to_plot);
 x_data_off = rf_sorted_off(1:num_to_plot);
@@ -773,15 +890,141 @@ grid on;
 
 title(sprintf('ON rf vs OFF rf\nr = %.3f (p = %.2e)', r, p));
 
+%% ---- plot NREM coupling vs receptive field overlap ----
+% NREM coupling vs RF overlap OFF
+validIdx_nrem = ~isnan(rf_overlap_on) & ~isnan(coupling_nrem_sorted);
+
+[r, p] = corr(rf_overlap_on(validIdx_nrem), coupling_nrem_sorted(validIdx_nrem));
+
+figure('Color', 'w', 'Position', [100, 100, 800, 800]);
+scatter(rf_overlap_on(validIdx_nrem), coupling_nrem_sorted(validIdx_nrem), 20, 'filled', ...
+    'MarkerFaceAlpha', 0.3, 'MarkerFaceColor', [0 0.45 0.74]);
+hold on;
+coeffs = polyfit(rf_overlap_on(validIdx_nrem), coupling_nrem_sorted(validIdx_nrem), 1);
+fitX = linspace(min(rf_overlap_on(validIdx_nrem)), max(rf_overlap_on(validIdx_nrem)), 100);
+plot(fitX, polyval(coeffs, fitX), 'k', 'LineWidth', 1);
+xlabel('ON RF Overlap (Jaccard Index)');
+ylabel('NREM Coupling Strength');
+title(sprintf('NREM Coupling vs. Spatial Overlap (ON)\nr = %.3f (p = %.2e)', r, p));
+grid on;
+
+% NREM coupling vs RF overlap OFF
+validIdx_nrem = ~isnan(rf_overlap_off) & ~isnan(coupling_nrem_sorted);
+
+[r, p] = corr(rf_overlap_off(validIdx_nrem), coupling_nrem_sorted(validIdx_nrem));
+
+figure('Color', 'w', 'Position', [100, 100, 800, 800]);
+scatter(rf_overlap_off(validIdx_nrem), coupling_nrem_sorted(validIdx_nrem), 20, 'filled', ...
+    'MarkerFaceAlpha', 0.3, 'MarkerFaceColor', [0.85 0.33 0.1]);
+hold on;
+coeffs = polyfit(rf_overlap_off(validIdx_nrem), coupling_nrem_sorted(validIdx_nrem), 1);
+fitX = linspace(min(rf_overlap_off(validIdx_nrem)), max(rf_overlap_off(validIdx_nrem)), 100);
+plot(fitX, polyval(coeffs, fitX), 'k', 'LineWidth', 1);
+xlabel('OFF RF Overlap (Jaccard Index)');
+ylabel('NREM Coupling Strength');
+title(sprintf('NREM Coupling vs. Spatial Overlap (OFF)\nr = %.3f (p = %.2e)', r, p));
+grid on;
+
+%% ----- plot REM coupling vs receptive field overlap ----
+% REM coupling vs RF overlap ON
+validIdx_rem = ~isnan(rf_overlap_on) & ~isnan(coupling_rem_sorted);
+
+[r, p] = corr(rf_overlap_on(validIdx_rem), coupling_rem_sorted(validIdx_rem));
+
+figure('Color', 'w', 'Position', [100, 100, 800, 800]);
+scatter(rf_overlap_on(validIdx_rem), coupling_rem_sorted(validIdx_rem), 20, 'filled', ...
+    'MarkerFaceAlpha', 0.3, 'MarkerFaceColor', [0 0.45 0.74]);
+hold on;
+coeffs = polyfit(rf_overlap_on(validIdx_rem), coupling_rem_sorted(validIdx_rem), 1);
+fitX = linspace(min(rf_overlap_on(validIdx_rem)), max(rf_overlap_on(validIdx_rem)), 100);
+plot(fitX, polyval(coeffs, fitX), 'k', 'LineWidth', 1);
+xlabel('ON RF Overlap (Jaccard Index)');
+ylabel('REM Coupling Strength');
+title(sprintf('REM Coupling vs. Spatial Overlap (ON)\nr = %.3f (p = %.2e)', r, p));
+grid on;
+
+% REM coupling vs RF overlap OFF
+validIdx_rem = ~isnan(rf_overlap_off) & ~isnan(coupling_rem_sorted);
+
+[r, p] = corr(rf_overlap_off(validIdx_rem), coupling_rem_sorted(validIdx_rem));
+
+figure('Color', 'w', 'Position', [100, 100, 800, 800]);
+scatter(rf_overlap_off(validIdx_rem), coupling_rem_sorted(validIdx_rem), 20, 'filled', ...
+    'MarkerFaceAlpha', 0.3, 'MarkerFaceColor', [0.85 0.33 0.1]);
+hold on;
+coeffs = polyfit(rf_overlap_off(validIdx_rem), coupling_rem_sorted(validIdx_rem), 1);
+fitX = linspace(min(rf_overlap_off(validIdx_rem)), max(rf_overlap_off(validIdx_rem)), 100);
+plot(fitX, polyval(coeffs, fitX), 'k', 'LineWidth', 1);
+xlabel('OFF RF Overlap (Jaccard Index)');
+ylabel('REM Coupling Strength');
+title(sprintf('REM Coupling vs. Spatial Overlap (OFF)\nr = %.3f (p = %.2e)', r, p));
+grid on;
+
+%% Combined figure with all ON/OFF vs wake/rem/nrem
+figure('Color', 'w', 'Position', [100, 100, 1400, 900]);
+
+stateLabels   = {'WAKE', 'NREM', 'REM'};
+couplingAll   = {coupling_wake_sorted, coupling_nrem_sorted, coupling_rem_sorted};
+stateColors   = {[0 0 0], [0.8 0.2 0.2], [0.2 0.4 0.8]};
+
+for col = 1:3  % columns = states (WAKE, NREM, REM)
+
+    coupling = couplingAll{col};
+
+    % --- ON row (row 1) ---
+    subplot(2, 3, col);
+    validIdx = ~isnan(rf_overlap_on) & ~isnan(coupling);
+    x = rf_overlap_on(validIdx);
+    y = coupling(validIdx);
+
+    [r, p] = corr(x, y);
+    scatter(x, y, 15, 'filled', 'MarkerFaceAlpha', 0.3, 'MarkerFaceColor', stateColors{col});
+    hold on;
+    coeffs = polyfit(x, y, 1);
+    fitX = linspace(min(x), max(x), 100);
+    plot(fitX, polyval(coeffs, fitX), 'k', 'LineWidth', 1.2);
+    xlabel('ON RF Overlap (Jaccard)');
+    ylabel([stateLabels{col} ' Coupling']);
+    title(sprintf('%s — ON\nr = %.3f, p = %.2e', stateLabels{col}, r, p));
+    grid on;
+
+    % --- OFF row (row 2) ---
+    subplot(2, 3, col + 3);
+    validIdx = ~isnan(rf_overlap_off) & ~isnan(coupling);
+    x = rf_overlap_off(validIdx);
+    y = coupling(validIdx);
+
+    [r, p] = corr(x, y);
+    scatter(x, y, 15, 'filled', 'MarkerFaceAlpha', 0.3, 'MarkerFaceColor', stateColors{col});
+    hold on;
+    coeffs = polyfit(x, y, 1);
+    fitX = linspace(min(x), max(x), 100);
+    plot(fitX, polyval(coeffs, fitX), 'k', 'LineWidth', 1.2);
+    xlabel('OFF RF Overlap (Jaccard)');
+    ylabel([stateLabels{col} ' Coupling']);
+    title(sprintf('%s — OFF\nr = %.3f, p = %.2e', stateLabels{col}, r, p));
+    grid on;
+
+end
+
+sgtitle('RF Overlap vs Coupling Strength Across States', 'FontSize', 16, 'FontWeight', 'bold');
+
+% Save
+saveas(gcf, fullfile(pngOutputDir, 'RF_overlap_vs_coupling_all_states.png'));
+
+
+
 %% New function call include overlap RFs in the summary pdf
-pngOutputDir = '\\fsmresfiles.fsm.northwestern.edu\fsmresfiles\Basic_Sciences\Phys\SenzaiLab\Aparna\Mouse08\111NEW-NORMALIZATION-MEAN-WITH-OVERLAP-NEW_PAIR_SUMMARIES_COUPLED_UNITS_WITH_RF';
+pngOutputDir = '\\fsmresfiles.fsm.northwestern.edu\fsmresfiles\Basic_Sciences\Phys\SenzaiLab\Aparna\Mouse08\0-PAIR-SUMMARIES-WITH-RF';
 if ~exist(pngOutputDir,'dir'), mkdir(pngOutputDir); end
 
-makePairSummaryPNGsPlusCorrRFs(all_ccgs, t, rankedPairs, good_clusters, ...
+dispTime = 0.5; % amount of +- time plotted as the ccg in the summary figure
+
+makePairSummaryPNGsPlusCorrRFs(all_ccgs_normalized, t, rankedPairs, good_clusters, ...
                          coupling_wake_sorted, coupling_nrem_sorted, coupling_rem_sorted, ...
                          unitDepth, meanWav, cell_type, ...
                          xpos, ypos, sr, ...
-                         sortBy, topN, pngOutputDir, RFmap);
+                         sortBy, topN, pngOutputDir, RFmap, maskVal, dispTime);
 
 
 
