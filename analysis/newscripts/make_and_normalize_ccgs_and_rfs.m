@@ -1386,6 +1386,105 @@ box off
 
 sgtitle('Top 50 RGC-SC Pairs', 'FontWeight', 'bold');
 
+%% Plot ON/OFF RF Similarity VS wake/nrem/rem
+
+% Add NREM and REM monoScores to ranked_rgcsc
+nPairs = height(ranked_rgcsc);
+monoScore_nrem_rgcsc = nan(nPairs, 1);
+monoScore_rem_rgcsc  = nan(nPairs, 1);
+
+for row = 1:nPairs
+    ui = ranked_rgcsc.ui(row);
+    uj = ranked_rgcsc.uj(row);
+    nrem_trace = ccg_nrem_norm(:, ui, uj);
+    rem_trace  = ccg_rem_norm(:,  ui, uj);
+    if ~all(isnan(nrem_trace))
+        monoScore_nrem_rgcsc(row) = max(nrem_trace(monoIdx)) - 1;
+    end
+    if ~all(isnan(rem_trace))
+        monoScore_rem_rgcsc(row)  = max(rem_trace(monoIdx))  - 1;
+    end
+end
+
+ranked_rgcsc.monoScore_nrem = monoScore_nrem_rgcsc;
+ranked_rgcsc.monoScore_rem  = monoScore_rem_rgcsc;
+
+figure('Color', 'w', 'Position', [100, 100, 1400, 900]);
+
+states = {'WAKE','NREM','REM'};
+colors = {'k','r','b'};
+
+for col = 1:3
+    
+    switch col
+        case 1; coupling = ranked_rgcsc.monoScore;
+        case 2; coupling = ranked_rgcsc.monoScore_nrem;
+        case 3; coupling = ranked_rgcsc.monoScore_rem;
+    end
+
+    c     = colors{col};
+    j_on  = ranked_rgcsc.jaccard_ON;
+    j_off = ranked_rgcsc.jaccard_OFF;
+
+    valid_on  = ~isnan(coupling) & ~isnan(j_on);
+    valid_off = ~isnan(coupling) & ~isnan(j_off);
+    
+    %% --- ON RF ---
+    subplot(2,3,col)
+    
+    x = j_on(valid_on);
+    y = coupling(valid_on);
+    
+    scatter(x, y, 15, c, 'filled', 'MarkerFaceAlpha', 0.3); 
+    hold on
+    
+    % best fit
+    p = polyfit(x,y,1);
+    xfit = linspace(0,1,100);
+    yfit = polyval(p,xfit);
+    plot(xfit,yfit,'Color',c,'LineWidth',2)
+    
+    % correlation
+    r = corr(x,y);
+    text(0.05, max(y)*0.9, sprintf('r = %.2f',r))
+    
+    xlabel('ON RF Jaccard')
+    ylabel('Coupling strength')
+    title(states{col})
+    xlim([0 1])
+    grid on
+    box off
+    
+    
+    %% --- OFF RF ---
+    subplot(2,3,col+3)
+    
+    x = j_off(valid_off);
+    y = coupling(valid_off);
+    
+    scatter(x, y, 15, c, 'filled', 'MarkerFaceAlpha', 0.3); 
+    hold on
+    
+    % best fit
+    p = polyfit(x,y,1);
+    xfit = linspace(0,1,100);
+    yfit = polyval(p,xfit);
+    plot(xfit,yfit,'Color',c,'LineWidth',2)
+    
+    % correlation
+    r = corr(x,y);
+    text(0.05, max(y)*0.9, sprintf('r = %.2f',r))
+    
+    xlabel('OFF RF Jaccard')
+    ylabel('Coupling strength')
+    xlim([0 1])
+    grid on
+    box off
+    
+end
+
+sgtitle('RF similarity vs coupling across sleep states only RGC-SC')
+
 
 
 %% -------------------------------------------
@@ -1461,6 +1560,106 @@ for m = 1:6
 end
 
 sgtitle('RF similarity vs coupling strength  |  RGC-RGC pairs only');
+
+%% Plot rgc-rgc across sleep states
+% Add NREM and REM monoScores to ranked_rgcrgc
+nPairs = height(ranked_rgcrgc);
+monoScore_nrem_rgcrgc = nan(nPairs, 1);
+monoScore_rem_rgcrgc  = nan(nPairs, 1);
+
+for row = 1:nPairs
+    ui = ranked_rgcrgc.ui(row);
+    uj = ranked_rgcrgc.uj(row);
+    nrem_trace = ccg_nrem_norm(:, ui, uj);
+    rem_trace  = ccg_rem_norm(:,  ui, uj);
+    if ~all(isnan(nrem_trace))
+        monoScore_nrem_rgcrgc(row) = max(nrem_trace(monoIdx)) - 1;
+    end
+    if ~all(isnan(rem_trace))
+        monoScore_rem_rgcrgc(row)  = max(rem_trace(monoIdx))  - 1;
+    end
+end
+
+ranked_rgcrgc.monoScore_nrem = monoScore_nrem_rgcrgc;
+ranked_rgcrgc.monoScore_rem  = monoScore_rem_rgcrgc;
+
+figure('Color', 'w', 'Position', [100, 100, 1400, 900]);
+
+states = {'WAKE','NREM','REM'};
+colors = {'k','r','b'};
+
+for col = 1:3
+    
+    switch col
+        case 1; coupling = ranked_rgcrgc.monoScore;
+        case 2; coupling = ranked_rgcrgc.monoScore_nrem;
+        case 3; coupling = ranked_rgcrgc.monoScore_rem;
+    end
+
+    c     = colors{col};
+    j_on  = ranked_rgcrgc.jaccard_ON;
+    j_off = ranked_rgcrgc.jaccard_OFF;
+
+    valid_on  = ~isnan(coupling) & ~isnan(j_on);
+    valid_off = ~isnan(coupling) & ~isnan(j_off);
+    
+    %% --- ON RF ---
+    subplot(2,3,col)
+    
+    x = j_on(valid_on);
+    y = coupling(valid_on);
+    
+    scatter(x, y, 15, c, 'filled', 'MarkerFaceAlpha', 0.3); 
+    hold on
+    
+    % best fit
+    p = polyfit(x,y,1);
+    xfit = linspace(0,1,100);
+    yfit = polyval(p,xfit);
+    plot(xfit,yfit,'Color',c,'LineWidth',2)
+    
+    % correlation
+    r = corr(x,y);
+    text(0.05, max(y)*0.9, sprintf('r = %.2f',r))
+    
+    xlabel('ON RF Jaccard')
+    ylabel('Coupling strength')
+    title(states{col})
+    xlim([0 1])
+    grid on
+    box off
+    
+    
+    %% --- OFF RF ---
+    subplot(2,3,col+3)
+    
+    x = j_off(valid_off);
+    y = coupling(valid_off);
+    
+    scatter(x, y, 15, c, 'filled', 'MarkerFaceAlpha', 0.3); 
+    hold on
+    
+    % best fit
+    p = polyfit(x,y,1);
+    xfit = linspace(0,1,100);
+    yfit = polyval(p,xfit);
+    plot(xfit,yfit,'Color',c,'LineWidth',2)
+    
+    % correlation
+    r = corr(x,y);
+    text(0.05, max(y)*0.9, sprintf('r = %.2f',r))
+    
+    xlabel('OFF RF Jaccard')
+    ylabel('Coupling strength')
+    xlim([0 1])
+    grid on
+    box off
+    
+end
+
+sgtitle('RF similarity vs coupling across sleep states only RGC-RGC')
+
+
 
 %% Summary figures for only RGC-RGC pairs
 saveDirRGCRGC = fullfile(pngOutputDir, '250ms-RGCRGC-CCG_SummaryFigures');
