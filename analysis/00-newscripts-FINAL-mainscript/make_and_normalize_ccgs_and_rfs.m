@@ -1,4 +1,13 @@
-% correctly_normalized_ccgs
+% this script works. correctly normalizes and saves ccg summary figures
+% combined with receptive field overlap. uses various helper functions. run
+% addpaths first and then can hit play (but probably want to go in
+% sections). 
+
+% makes and normalizes ccgs (100ms)
+% ranks by strength of coupling 
+% saves summary figs
+% same for rgc-sc only or rgc-rgc only
+% makes rf overlap vs coupling plots
 
 %% Start from Scratch, 3/4/2026
 
