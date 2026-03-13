@@ -1,7 +1,5 @@
 % this script works. correctly normalizes and saves ccg summary figures
-% combined with receptive field overlap. uses various helper functions. run
-% addpaths first and then can hit play (but probably want to go in
-% sections). 
+% combined with receptive field overlap. uses various helper functions. 
 
 % makes and normalizes ccgs (100ms)
 % ranks by strength of coupling 
@@ -9,7 +7,7 @@
 % same for rgc-sc only or rgc-rgc only
 % makes rf overlap vs coupling plots
 
-%% Start from Scratch, 3/4/2026
+%% 3/4/2026
 
 addpath(genpath("R:\Basic_Sciences\Phys\SenzaiLab\Yuta_Senzai\MatlabCodes\MATLAB\MyCodes"))
 addpath(genpath("C:\Users\urs2027\Documents\GitHub\Senzai-Lab\buzcode-master")) 
@@ -20,9 +18,9 @@ nchan_probe = 384;
 dtype = 'int16';
 
 % kilosort directory
-% ksDir = '\\fsmresfiles.fsm.northwestern.edu\fsmresfiles\Basic_Sciences\Phys\SenzaiLab\Elissa_Belluccini\Kilosort\Mouse08_SC_20251007_810to2250\kilosort4';
 ksDir = 'D:\Kilosort\Mouse08_SC_20251007_810to2250\kilosort4';
 
+% variables from Kilosort
 spikeTimes    = readNPY(fullfile(ksDir,'spike_times.npy'));
 spikeTimes    = spikeTimes + 1;
 spikeClusters = readNPY(fullfile(ksDir,'spike_clusters.npy'));
@@ -32,6 +30,7 @@ chanPos       = readNPY(fullfile(ksDir,'channel_positions.npy')); % [chan x 2]
 cgFile = fullfile(ksDir, 'cluster_KSLabel.tsv');
 cluster_groups = readtable(cgFile, 'FileType','text', 'Delimiter','\t');
 
+% isolate 'good' clusters
 keepGroups = {'good'};
 toKeep = ismember(cluster_groups.KSLabel, keepGroups);
 keepClusters = cluster_groups.cluster_id(toKeep);
@@ -40,7 +39,7 @@ keepSpike = ismember(spikeClusters, keepClusters);
 spikeTimes    = spikeTimes(keepSpike);
 spikeClusters = spikeClusters(keepSpike);
 
-%% Get per unit depth
+% Get per unit depth
 xpos = chanPos(:,1);
 ypos = chanPos(:,2);
 
@@ -68,7 +67,7 @@ end
 
 s = [ts unitIDs];
 
-%% Load Sleep States
+%% Load Sleep States (after sleep scoring)
 eegDir = '\\fsmresfiles.fsm.northwestern.edu\fsmresfiles\Basic_Sciences\Phys\SenzaiLab\Aparna\Mouse08_eeg';
 load(fullfile(eegDir, 'Mouse08_eeg.SleepState.states.mat'));
 
@@ -85,11 +84,7 @@ wakeDuration = sum(wakeInts(:,2) - wakeInts(:,1));
 nremDuration = sum(nremInts(:,2) - nremInts(:,1));
 remDuration  = sum(remInts(:,2)  - remInts(:,1));
 
-% fprintf('State durations (s) - WAKE: %.1f | NREM: %.1f | REM: %.1f\n', ...
-%     wakeDuration, nremDuration, remDuration);
-
-% Preallocate
-minFiringRate = 0.5; % Hz
+minFiringRate = 0.5; % Hz - used as exclusion threshold
 
 firingRate_wake = zeros(nClusters,1);
 firingRate_nrem = zeros(nClusters,1);
@@ -119,7 +114,7 @@ fprintf('  REM : %d / %d\n', sum(firingRate_rem  < minFiringRate), nClusters);
 %% ----------- Calculate CCGs -----------------------
 
 binSize  = 0.001;   % 1 ms bins
-duration = 0.1;     % ms window (good for spike sorting / monosynaptic)
+duration = 0.1;     % ms window, 0.1 means +/- 50ms lag
 
 spikeTimes_wake = cell(nClusters, 1);
 spikeTimes_nrem = cell(nClusters, 1);
@@ -149,7 +144,7 @@ fprintf(' Begin Normalization...\n');
 
 %% ---------- Normalize CCGs and filter for low spike count -----------
 
-%Precompute reference spike counts for normalization
+% reference spike counts for normalization
 nRefSpikes_wake = zeros(nClusters, 1);
 nRefSpikes_nrem = zeros(nClusters, 1);
 nRefSpikes_rem  = zeros(nClusters, 1);
@@ -179,7 +174,7 @@ fprintf('  NREM: %d / %d\n', sum(~lowRate_nrem), nClusters);
 fprintf('  REM : %d / %d\n', sum(~lowRate_rem),  nClusters);
 
 
-%% ------------- plot example unit ccg (raw rates, not counts) ------------
+%% ------------- manually plot example unit ccg (raw rates, not counts) ------------
 ksIDi = 370; % kilosort cluster id
 ksIDj = 376; % kilosort cluster id
 
@@ -200,49 +195,7 @@ xlim([t_ccg(1)*1000, t_ccg(end)*1000]);
 box off;
 hold off;
 
-
-%% ------------ Rank pairs
-% monoWin  = 0.005;
-% monoIdx  = abs(t_ccg) <= monoWin;
-% flankIdx = abs(t_ccg) >= 0.8 * (duration/2);
-% 
-% monoScore_wake = zeros(nClusters, nClusters);
-% monoScore_nrem = zeros(nClusters, nClusters);
-% monoScore_rem  = zeros(nClusters, nClusters);
-% 
-% for ui = 1:nClusters
-%     for uj = 1:nClusters
-%         if ui == uj; continue; end
-% 
-%         wake_trace = ccg_wake_rate(:, ui, uj);
-%         nrem_trace = ccg_nrem_rate(:, ui, uj);
-%         rem_trace  = ccg_rem_rate(:,  ui, uj);
-% 
-%         if ~all(isnan(wake_trace))
-%             monoScore_wake(ui,uj) = max(wake_trace(monoIdx)) - mean(wake_trace(flankIdx), 'omitnan');
-%         end
-%         if ~all(isnan(nrem_trace))
-%             monoScore_nrem(ui,uj) = max(nrem_trace(monoIdx)) - mean(nrem_trace(flankIdx), 'omitnan');
-%         end
-%         if ~all(isnan(rem_trace))
-%             monoScore_rem(ui,uj)  = max(rem_trace(monoIdx))  - mean(rem_trace(flankIdx), 'omitnan');
-%         end
-%     end
-% end
-% 
-% [ii, jj]  = ndgrid(1:nClusters, 1:nClusters);
-% mask      = ii ~= jj;
-% ui_list   = ii(mask);
-% uj_list   = jj(mask);
-% 
-% ranked_wake = sortrows(table(ui_list, uj_list, good_clusters(ui_list), good_clusters(uj_list), monoScore_wake(mask), ...
-%     'VariableNames', {'ui','uj','ksID_ref','ksID_target','monoScore'}), 'monoScore', 'descend');
-% ranked_nrem = sortrows(table(ui_list, uj_list, good_clusters(ui_list), good_clusters(uj_list), monoScore_nrem(mask), ...
-%     'VariableNames', {'ui','uj','ksID_ref','ksID_target','monoScore'}), 'monoScore', 'descend');
-% ranked_rem  = sortrows(table(ui_list, uj_list, good_clusters(ui_list), good_clusters(uj_list), monoScore_rem(mask),  ...
-%     'VariableNames', {'ui','uj','ksID_ref','ksID_target','monoScore'}), 'monoScore', 'descend');
-
-%% ---------------------------- Normalize ALL CCGs pairs
+%% ----------------- Normalize ALL CCGs pairs -------------------
 monoWin  = 0.005;
 monoIdx  = abs(t_ccg) <= monoWin;
 flankIdx = abs(t_ccg) >= 0.8 * (duration/2);
@@ -271,7 +224,7 @@ fprintf('  Valid pairs - WAKE: %d  NREM: %d  REM: %d\n', ...
     sum(~isnan(squeeze(ccg_nrem_norm(1,:,:))), 'all'), ...
     sum(~isnan(squeeze(ccg_rem_norm(1,:,:))),  'all'));
 
-%% ---------------------- Rank pairs on normalized CCG
+%% --------------- Rank pairs on normalized CCG ------------
 monoScore_wake = zeros(nClusters, nClusters);
 monoScore_nrem = zeros(nClusters, nClusters);
 monoScore_rem  = zeros(nClusters, nClusters);
@@ -310,7 +263,8 @@ ranked_rem  = sortrows(table(ui_list, uj_list, good_clusters(ui_list), good_clus
     'VariableNames', {'ui','uj','ksID_ref','ksID_target','monoScore'}), 'monoScore', 'descend');
 
 %% Remove duplicate pairs in ranking
-% de-duplicate wake
+
+%de-duplicate wake
 seen = false(nClusters, nClusters);
 keepRows = false(height(ranked_wake), 1);
 
@@ -443,11 +397,11 @@ for row = 1:nPairs
     onJ  = mean(RFmap{uj}.ON.OnSet,  3);
     offJ = mean(RFmap{uj}.OFF.OnSet, 3);
 
-    % --- 1. Pixel-wise correlation ---
+    % 1. Pixel-wise correlation -- overlap method 1
     corr_ON(row)  = corr(onI(:),  onJ(:));
     corr_OFF(row) = corr(offI(:), offJ(:));
 
-    % --- 2. Jaccard overlap of thresholded regions ---
+    % 2. Jaccard overlap of thresholded region -- overlap method 2
     % Threshold: bins above 1 std of the map
     thresh_onI  = onI  > mean(onI(:))  + 2*std(onI(:));
     thresh_onJ  = onJ  > mean(onJ(:))  + 2*std(onJ(:));
@@ -462,7 +416,7 @@ for row = 1:nPairs
     if union_ON  > 0; jaccard_ON(row)  = intersect_ON  / union_ON;  end
     if union_OFF > 0; jaccard_OFF(row) = intersect_OFF / union_OFF; end
 
-    % --- 3. Distance between RF centers (amplitude-weighted centroid) ---
+    % 3. Distance between RF centers (amplitude-weighted centroid) -- overlap method 2
     [nY, nX] = size(onI);
     [xGrid, yGrid] = meshgrid(1:nX, 1:nY);
 
@@ -782,10 +736,11 @@ end
 
 sgtitle('RF similarity vs coupling across sleep states')
 
-%% ---------- Make Summary Figures (includes RF overlap) -------
 
-% Load cell type classification
-% Expected variables from .mat: cluster_id (array), cell_type (cell array of strings)
+%% -------------------------------------------------------------
+%% ---------- Make Summary Figures (includes RF overlap) -------
+%% -------------------------------------------------------------
+
 % Map cluster_id -> cell_type string for fast lookup
 cellTypeMap = containers.Map(num2cell(double(cluster_id)), cell_type);
 
@@ -794,10 +749,10 @@ pngOutputDir = "\\fsmresfiles.fsm.northwestern.edu\fsmresfiles\Basic_Sciences\Ph
 saveDir = fullfile(pngOutputDir, 'withRF-dedup-250ms-CCG_SummaryFigures');
 if ~exist(saveDir, 'dir'); mkdir(saveDir); end
 
-nSummary = 100;
+nSummary = 100; % how many pairs to plot
 figCount = 0;
 
-for row = 1:height(ranked_wake_dedup) % or ranked_wake
+for row = 1:height(ranked_wake_dedup)
     ui = ranked_wake_dedup.ui(row);
     uj = ranked_wake_dedup.uj(row);
 
@@ -881,22 +836,6 @@ for row = 1:height(ranked_wake_dedup) % or ranked_wake
     ax_wJ = subplot(5, 2, 4);
     plotMeanWaveformsStacked(meanWav, good_clusters, xpos, ypos, sr, uj, ax_wJ);
 
-    % % --- Cell type labels --- %% Integrated this into the title
-    % ax_ctI = subplot(6, 2, 5);
-    % axis(ax_ctI, 'off');
-    % text(0.5, 0.5, sprintf('Unit %d\n%s', ksIDi, ctI), 'Parent', ax_ctI, ...
-    %     'HorizontalAlignment','center', 'VerticalAlignment','middle', ...
-    %     'FontSize', 16, 'FontWeight', 'bold', ...
-    %     'Color', get_cell_type_color(ctI));
-    % 
-    % 
-    % ax_ctJ = subplot(6, 2, 6);
-    % axis(ax_ctJ, 'off');
-    % text(0.5, 0.5, sprintf('Unit %d\n%s', ksIDj, ctJ), 'Parent', ax_ctJ, ...
-    %     'HorizontalAlignment','center', 'VerticalAlignment','middle', ...
-    %     'FontSize', 16, 'FontWeight', 'bold', ...
-    %     'Color', get_cell_type_color(ctJ));
-
     % --- ON RF ---
     ax_onI = subplot(5, 2, 5);
     imagesc(ax_onI, onI);
@@ -926,9 +865,6 @@ for row = 1:height(ranked_wake_dedup) % or ranked_wake
     axis(ax_offJ, 'off');
     title(ax_offJ, 'OFF RF');
     colorbar(ax_offJ);
-
-    % sgtitle(sprintf('Pair %d of %d  |  WAKE rank %d', figCount, nSummary, row), ...
-    %     'FontSize', 11);
 
     sgtitle(sprintf('Pair %d/%d  |  Rank %d  |  %d (%s)  →  %d (%s)', ...
         figCount, nSummary, row, ksIDi, ctI, ksIDj, ctJ), ...
