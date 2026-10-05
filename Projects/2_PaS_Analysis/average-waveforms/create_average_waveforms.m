@@ -7,7 +7,7 @@ sr = 30000;
 nchan_probe = 384;
 dtype = 'int16';
 
-ksDir = 'D:\Kilosort\Mouse08_SC_20251007_810to2250\kilosort4';
+ksDir = 'R:\Basic_Sciences\Phys\SenzaiLab\Aparna\Data_by_mouse\m002\small-spread-neuropixel-config\2026-09-25\ad_session_2026_09_25\ProbeA\kilosort';
 
 spikeTimes    = readNPY(fullfile(ksDir,'spike_times.npy'));
 spikeTimes    = spikeTimes + 1;
@@ -49,10 +49,11 @@ nClusters = numel(good_clusters);
 
 % Begin waveform extraction
 
-rawFile = "D:\Kilosort\Mouse08_SC_20251007_810to2250\Merged.dat";
+rawFile = "R:\Basic_Sciences\Phys\SenzaiLab\Aparna\Data_by_mouse\m002\small-spread-neuropixel-config\2026-09-25\ad_session_2026_09_25\ProbeA\concat\traces_cached_seg0.raw";
+% rawFile = "D:\Kilosort\Mouse08_SC_20251007_810to2250\Merged.dat";
 
 % chunking it because Merged.dat is huge
-nCh = 385; % from Elissa
+nCh = 384; % from Elissa
 bytesPerSample = 2;
 
 fileInfo = dir(rawFile);
@@ -109,14 +110,14 @@ disp("Calculate Avg Waveforms Complete");
 %% Visualize mean waveforms - filter by channel parity to avoid checkerboard (even vs odd units)
 
 % changed folder structure, change outputs if need to run again
-outWaveDir = '\\fsmresfiles.fsm.northwestern.edu\fsmresfiles\Basic_Sciences\Phys\SenzaiLab\Aparna\Mouse08\20251007_MergedDat\cluster_KSLabel\plus2ms-minus1ms\average-waveforms-per-unit-from-raw';
-outDepthDir = '\\fsmresfiles.fsm.northwestern.edu\fsmresfiles\Basic_Sciences\Phys\SenzaiLab\Aparna\Mouse08\20251007_MergedDat\cluster_KSLabel\plus2ms-minus1ms\heatmap-21chan-per-unit-from-raw';
+outWaveDir = '\\fsmresfiles.fsm.northwestern.edu\fsmresfiles\Basic_Sciences\Phys\SenzaiLab\Aparna\Data_by_mouse\m002\small-spread-neuropixel-config\2026-09-25\AverageWaveforms\average-waveforms-per-unit-from-raw';
+outDepthDir = '\\fsmresfiles.fsm.northwestern.edu\fsmresfiles\Basic_Sciences\Phys\SenzaiLab\Aparna\Data_by_mouse\m002\small-spread-neuropixel-config\2026-09-25\AverageWaveforms\heatmap-21chan-per-unit-from-raw';
 
 if ~exist(outWaveDir, 'dir'); mkdir(outWaveDir); end
 if ~exist(outDepthDir, 'dir'); mkdir(outDepthDir); end
 
 
-for clusterID_index = 52:nClusters
+for clusterID_index = 1:nClusters
 
     mean_wave_this_cluster = meanWav(:,:,clusterID_index);
     num_channels_to_plot = 21; %% change this based on how many channels you want to visualize above/below the peak channel
@@ -251,7 +252,7 @@ for clusterID_index = 52:nClusters
 end
 
 %% Save mean waveforms and cluster IDs for cell type identification (python script)
-saveFolder = '\\fsmresfiles.fsm.northwestern.edu\fsmresfiles\Basic_Sciences\Phys\SenzaiLab\Aparna\Mouse08\mean-waveforms-good-clusters';
+saveFolder = '\\fsmresfiles.fsm.northwestern.edu\fsmresfiles\Basic_Sciences\Phys\SenzaiLab\Aparna\Data_by_mouse\m002\small-spread-neuropixel-config\2026-09-25\AverageWaveforms';
 save(fullfile(saveFolder, 'meanWav_units.mat'), 'meanWav', 'good_clusters', 'xpos', 'ypos');
 disp("Mean Waveforms Saved!")
 
